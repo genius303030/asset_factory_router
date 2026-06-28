@@ -1,0 +1,2 @@
+[console_scripts]
+asset-factory = asset_factory.main:main

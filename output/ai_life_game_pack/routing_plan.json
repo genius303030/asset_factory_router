@@ -1,0 +1,68 @@
+{
+  "recommended_provider": "Fal.ai",
+  "fallback_provider": "Leonardo.ai",
+  "all_provider_scores": {
+    "OpenAI": 53.0,
+    "Runway": -1.0,
+    "Veo": -1.0,
+    "Fal.ai": 60.0,
+    "Leonardo.ai": 55.0
+  },
+  "score_breakdown": {
+    "OpenAI": {
+      "quality": 12.0,
+      "speed": 20.0,
+      "cost": 15.0,
+      "style_match": 0.0,
+      "task_support": 10.0,
+      "batch_size": 0.0,
+      "risk_penalty": -4.0,
+      "provider_penalty": 0.0
+    },
+    "Runway": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    },
+    "Veo": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    },
+    "Fal.ai": {
+      "quality": 9.0,
+      "speed": 25.0,
+      "cost": 20.0,
+      "style_match": 0.0,
+      "task_support": 10.0,
+      "batch_size": 0.0,
+      "risk_penalty": -4.0,
+      "provider_penalty": 0.0
+    },
+    "Leonardo.ai": {
+      "quality": 12.0,
+      "speed": 15.0,
+      "cost": 20.0,
+      "style_match": 0.0,
+      "task_support": 10.0,
+      "batch_size": 0.0,
+      "risk_penalty": -2.0,
+      "provider_penalty": 0.0
+    }
+  },
+  "reason": "Provider Fal.ai scored highest (60.0) based on your requirements (Quality: medium, Speed: fast, Budget: low).",
+  "risk_notes": "Risks to watch out for: API stability during peak hours.",
+  "estimated_cost_level": "2",
+  "estimated_speed_level": "5",
+  "selected_config_source": "router_weights.json"
+}

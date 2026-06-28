@@ -1,0 +1,68 @@
+{
+  "recommended_provider": "Leonardo.ai",
+  "fallback_provider": "Leonardo.ai",
+  "all_provider_scores": {
+    "OpenAI": -1.0,
+    "Runway": -1.0,
+    "Veo": -1.0,
+    "Fal.ai": -1.0,
+    "Leonardo.ai": 49.0
+  },
+  "score_breakdown": {
+    "OpenAI": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    },
+    "Runway": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    },
+    "Veo": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    },
+    "Fal.ai": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    },
+    "Leonardo.ai": {
+      "quality": 20.0,
+      "speed": 9.0,
+      "cost": 12.0,
+      "style_match": 0.0,
+      "task_support": 10.0,
+      "batch_size": 0.0,
+      "risk_penalty": -2.0,
+      "provider_penalty": 0.0
+    }
+  },
+  "reason": "Provider Leonardo.ai scored highest (49.0) based on your requirements (Quality: high, Speed: normal, Budget: medium).",
+  "risk_notes": "Risks to watch out for: Style bleeding across elements.",
+  "estimated_cost_level": "2",
+  "estimated_speed_level": "3",
+  "selected_config_source": "router_weights.json"
+}

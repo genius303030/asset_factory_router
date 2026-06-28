@@ -1,0 +1,32 @@
+{
+  "quality_weight": {
+    "low": 1.0,
+    "medium": 3.0,
+    "high": 5.0
+  },
+  "speed_weight": {
+    "slow": 1.0,
+    "normal": 3.0,
+    "fast": 5.0
+  },
+  "budget_weight": {
+    "low": 5.0,
+    "medium": 3.0,
+    "high": 1.0
+  },
+  "style_bonus": 10.0,
+  "batch_size_modifier": {
+    "small": 1.0,
+    "medium": 1.0,
+    "large": 2.0
+  },
+  "task_type_priority": {
+    "image": 1.0,
+    "video": 1.5,
+    "ui": 1.2
+  },
+  "provider_penalty": {
+    "MockProvider": -50.0
+  },
+  "fallback_threshold": 0.0
+}

@@ -1,0 +1,11 @@
+{
+  "project_name": "Fantasy RPG UI Kit",
+  "task_type": "ui",
+  "style": "fantasy",
+  "quality": "medium",
+  "speed": "normal",
+  "budget": "low",
+  "batch_size": "large",
+  "description": "A complete set of UI assets for a medieval fantasy RPG, including inventory slots, health bars, and ornate frames.",
+  "target_audience": "RPG Players"
+}

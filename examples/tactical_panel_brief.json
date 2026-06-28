@@ -1,0 +1,11 @@
+{
+  "project_name": "Tactical Command Center UI",
+  "task_type": "ui",
+  "style": "tactical_ui",
+  "quality": "high",
+  "speed": "normal",
+  "budget": "medium",
+  "batch_size": "medium",
+  "description": "我要做一套科技感戰術面板 UI，風格要像黑色軍事指揮中心，有藍色光效、資料卡片、任務面板、素材要能給 Codex 或圖像 AI 使用。",
+  "target_audience": "Hardcore gamers, Military simulation fans"
+}

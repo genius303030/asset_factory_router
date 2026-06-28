@@ -1,0 +1,15 @@
+{
+  "project": "Fantasy RPG UI Kit",
+  "files_included": [
+    "project_brief.json",
+    "prompt_pack.md",
+    "image_prompts.json",
+    "ui_style_guide.md",
+    "storyboard.md",
+    "asset_manifest.json",
+    "routing_plan.json",
+    "codex_asset_tasks.md",
+    "production_checklist.md",
+    "pack_summary.md"
+  ]
+}

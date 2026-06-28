@@ -1,0 +1,6 @@
+{
+  "tactical_ui": ["hud", "military", "hologram", "dark"],
+  "cyberpunk": ["neon", "dystopian", "synthwave"],
+  "realistic": ["photo", "8k", "dslr"],
+  "anime": ["2d", "cel-shaded", "studio ghibli"]
+}

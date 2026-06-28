@@ -1,0 +1,68 @@
+{
+  "recommended_provider": "Veo",
+  "fallback_provider": "Runway",
+  "all_provider_scores": {
+    "OpenAI": -1.0,
+    "Runway": 31.0,
+    "Veo": 44.0,
+    "Fal.ai": 30.0,
+    "Leonardo.ai": -1.0
+  },
+  "score_breakdown": {
+    "OpenAI": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    },
+    "Runway": {
+      "quality": 20.0,
+      "speed": 3.0,
+      "cost": 2.0,
+      "style_match": 0.0,
+      "task_support": 10.0,
+      "batch_size": 0.0,
+      "risk_penalty": -4.0,
+      "provider_penalty": 0.0
+    },
+    "Veo": {
+      "quality": 25.0,
+      "speed": 2.0,
+      "cost": 1.0,
+      "style_match": 10.0,
+      "task_support": 10.0,
+      "batch_size": 0.0,
+      "risk_penalty": -4.0,
+      "provider_penalty": 0.0
+    },
+    "Fal.ai": {
+      "quality": 15.0,
+      "speed": 5.0,
+      "cost": 4.0,
+      "style_match": 0.0,
+      "task_support": 10.0,
+      "batch_size": 0.0,
+      "risk_penalty": -4.0,
+      "provider_penalty": 0.0
+    },
+    "Leonardo.ai": {
+      "quality": 0.0,
+      "speed": 0.0,
+      "cost": 0.0,
+      "style_match": 0.0,
+      "task_support": -1000.0,
+      "batch_size": 0.0,
+      "risk_penalty": 0.0,
+      "provider_penalty": 0.0
+    }
+  },
+  "reason": "Provider Veo scored highest (44.0) based on your requirements (Quality: high, Speed: slow, Budget: high).",
+  "risk_notes": "Risks to watch out for: High budget burn rate.",
+  "estimated_cost_level": "5",
+  "estimated_speed_level": "2",
+  "selected_config_source": "router_weights.json"
+}

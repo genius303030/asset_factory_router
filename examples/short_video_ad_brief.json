@@ -1,0 +1,13 @@
+{
+  "project_name": "Cyberpunk Short Video Ad",
+  "task_type": "video",
+  "style": "cyberpunk",
+  "quality": "high",
+  "speed": "fast",
+  "budget": "high",
+  "batch_size": "medium",
+  "description": "A 15-second high-energy cyberpunk ad for a new energy drink.",
+  "target_audience": "Gen-Z Gamers",
+  "usage_context": "TikTok and Instagram Reels",
+  "target_outputs": ["1080x1920 mp4"]
+}

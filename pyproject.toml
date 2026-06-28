@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asset-factory"
+version = "0.2.0"
+description = "AI Asset Factory + Model Router MVP"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+asset-factory = "asset_factory.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["asset_factory*"]

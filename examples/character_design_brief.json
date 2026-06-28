@@ -1,0 +1,13 @@
+{
+  "project_name": "Mecha Character Concept",
+  "task_type": "character",
+  "style": "anime mecha",
+  "quality": "ultra",
+  "speed": "slow",
+  "budget": "high",
+  "batch_size": "small",
+  "description": "A highly detailed concept art of a pilot and their mecha unit, showing front, back, and side profiles.",
+  "target_audience": "Anime fans, model kit builders",
+  "usage_context": "Concept art book and 3D modeling reference",
+  "target_outputs": ["4k png", "turnaround sheet"]
+}
