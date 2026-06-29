@@ -10,3 +10,11 @@ build/
 venv/
 node_modules/
 *.log
+
+# Owner private pricing data
+owner_pricing_private/
+input/owner_pricing/private/
+inputs/owner_pricing/private/
+data/owner_pricing/private/
+*.owner-private-pricing.csv
+*.owner-private-pricing.json

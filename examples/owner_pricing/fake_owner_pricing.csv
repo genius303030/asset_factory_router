@@ -1,0 +1,8 @@
+material_key,material_name,unit,unit_price
+sample_concrete,Demo Concrete,bags,125.50
+sample_rebar,Demo Rebar,pcs,88
+sample_sand,Demo Sand,m3,42.00
+sample_rebar,Demo Rebar Duplicate,pcs,90
+sample_missing_unit,Demo Missing Unit,,12.00
+sample_bad_price,Demo Bad Price,kg,abc
+sample_unchanged,Demo Unchanged,kg,30.00
