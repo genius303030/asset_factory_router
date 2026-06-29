@@ -15,6 +15,7 @@ pip install -e .
 - `asset-factory inspect --pack <path>`
 - `asset-factory list-providers`
 - `asset-factory owner-pricing-dry-run --csv <path> --report <path> [--current-pricing <path>]`
+- `asset-factory owner-pricing-plan-sandbox-apply --csv <path> --plan <path> [--current-pricing <path>]`
 
 ## Testing
 ```bash

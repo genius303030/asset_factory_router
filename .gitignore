@@ -18,3 +18,5 @@ inputs/owner_pricing/private/
 data/owner_pricing/private/
 *.owner-private-pricing.csv
 *.owner-private-pricing.json
+*.owner-pricing-sandbox-plan.md
+*.owner-pricing-sandbox-plan.json

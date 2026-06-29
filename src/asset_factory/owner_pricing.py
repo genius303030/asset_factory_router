@@ -2,6 +2,7 @@ import csv
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -76,6 +77,27 @@ class OwnerPricingDryRunResult:
     would_be_added: List[PricingChange]
     would_be_updated: List[PricingChange]
     would_be_unchanged: List[PricingChange]
+
+
+LIVE_OUTPUT_PATH_PARTS = {
+    "config",
+    "data",
+    "live",
+    "prod",
+    "production",
+    "src",
+}
+
+LIVE_OUTPUT_FILENAMES = {
+    "current_pricing.csv",
+    "current_pricing.json",
+    "material_pricing.csv",
+    "material_pricing.json",
+    "owner_pricing.csv",
+    "owner_pricing.json",
+    "pricing.csv",
+    "pricing.json",
+}
 
 
 def dry_run_owner_pricing_import(
@@ -170,6 +192,53 @@ def write_preview_report(result: OwnerPricingDryRunResult, report_path: str) -> 
         file.write(report)
 
 
+def write_sandbox_apply_plan(
+    csv_path: str,
+    plan_path: str,
+    current_pricing_path: Optional[str] = None,
+    dry_run_report_path: Optional[str] = None,
+    plan_json_path: Optional[str] = None,
+    overwrite: bool = False,
+) -> OwnerPricingDryRunResult:
+    _validate_sandbox_output_path(plan_path, overwrite=overwrite)
+    if plan_json_path:
+        _validate_sandbox_output_path(plan_json_path, overwrite=overwrite)
+        if os.path.abspath(plan_json_path) == os.path.abspath(plan_path):
+            raise ValueError("plan JSON output path must be different from markdown plan path")
+
+    dry_run_report_info = _read_optional_dry_run_report(dry_run_report_path)
+    result = dry_run_owner_pricing_import(csv_path, current_pricing_path)
+    generated_at = _generated_timestamp()
+    markdown = build_sandbox_apply_plan(
+        result,
+        plan_path=plan_path,
+        dry_run_report_info=dry_run_report_info,
+        plan_json_path=plan_json_path,
+        generated_at=generated_at,
+    )
+
+    plan_dir = os.path.dirname(os.path.abspath(plan_path))
+    os.makedirs(plan_dir, exist_ok=True)
+    with open(plan_path, "w", encoding="utf-8") as file:
+        file.write(markdown)
+
+    if plan_json_path:
+        plan_json = build_sandbox_apply_plan_json(
+            result,
+            plan_path=plan_path,
+            dry_run_report_info=dry_run_report_info,
+            plan_json_path=plan_json_path,
+            generated_at=generated_at,
+        )
+        json_dir = os.path.dirname(os.path.abspath(plan_json_path))
+        os.makedirs(json_dir, exist_ok=True)
+        with open(plan_json_path, "w", encoding="utf-8") as file:
+            json.dump(plan_json, file, indent=2, ensure_ascii=False)
+            file.write("\n")
+
+    return result
+
+
 def build_preview_report(result: OwnerPricingDryRunResult) -> str:
     lines = [
         "# Owner Pricing Import Dry-run Preview",
@@ -211,6 +280,121 @@ def build_preview_report(result: OwnerPricingDryRunResult) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def build_sandbox_apply_plan(
+    result: OwnerPricingDryRunResult,
+    plan_path: str,
+    dry_run_report_info: Optional[Dict[str, Any]] = None,
+    plan_json_path: Optional[str] = None,
+    generated_at: Optional[str] = None,
+) -> str:
+    generated_at = generated_at or _generated_timestamp()
+    warnings = _sandbox_warnings(result)
+    skipped_rows = _skipped_rows(result)
+    checklist = _confirmation_checklist()
+
+    lines = [
+        "# Owner Pricing Sandbox Apply Plan",
+        "",
+        "Sandbox plan only. This file is not an import result and does not mutate live pricing data.",
+        "",
+        "## Plan Metadata",
+        "",
+        f"- Generated at: `{generated_at}`",
+        f"- Source CSV path: `{result.source_csv}`",
+        f"- Baseline pricing path: `{result.current_pricing or 'not provided'}`",
+        f"- Dry-run report reference: `{_dry_run_report_label(dry_run_report_info)}`",
+        f"- Markdown sandbox output target: `{plan_path}`",
+        f"- JSON sandbox output target: `{plan_json_path or 'not requested'}`",
+        "",
+        "## Summary",
+        "",
+        "| Metric | Count |",
+        "| --- | ---: |",
+        f"| Total rows read | {result.rows_read} |",
+        f"| Valid rows | {result.valid_rows} |",
+        f"| Invalid rows | {result.invalid_rows} |",
+        f"| Duplicate keys | {len(result.duplicate_material_keys)} |",
+        f"| Add candidates | {len(result.would_be_added)} |",
+        f"| Update candidates | {len(result.would_be_updated)} |",
+        f"| Unchanged rows | {len(result.would_be_unchanged)} |",
+        f"| Skipped rows | {len(skipped_rows)} |",
+        "",
+        "## Warnings",
+        "",
+        *_bullet_lines(warnings),
+        "",
+        _duplicate_section(result.duplicate_material_keys),
+        _pricing_change_section("Add Candidates", result.would_be_added),
+        _pricing_change_section("Update Candidates", result.would_be_updated),
+        _pricing_change_section("Unchanged Rows", result.would_be_unchanged),
+        _skipped_rows_section(skipped_rows),
+        "## Confirmation Checklist Before Any Future Apply",
+        "",
+        *_checklist_lines(checklist),
+        "",
+        "## Sandbox Boundaries",
+        "",
+        "- This plan does not import owner pricing into live JSON.",
+        "- This plan does not update production pricing data.",
+        "- This plan is intended for owner/G2 review before any future apply command exists.",
+        "- Any future apply must use a separate reviewed command and an explicit sandbox output path.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def build_sandbox_apply_plan_json(
+    result: OwnerPricingDryRunResult,
+    plan_path: str,
+    dry_run_report_info: Optional[Dict[str, Any]] = None,
+    plan_json_path: Optional[str] = None,
+    generated_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    generated_at = generated_at or _generated_timestamp()
+    skipped_rows = _skipped_rows(result)
+
+    return {
+        "plan_type": "owner_pricing_sandbox_apply_plan",
+        "dry_run_only": True,
+        "generated_at": generated_at,
+        "source_csv_path": result.source_csv,
+        "baseline_pricing_path": result.current_pricing,
+        "dry_run_report": dry_run_report_info,
+        "sandbox_output_target": {
+            "markdown": plan_path,
+            "json": plan_json_path,
+        },
+        "summary": {
+            "total_rows_read": result.rows_read,
+            "valid_rows": result.valid_rows,
+            "invalid_rows": result.invalid_rows,
+            "duplicate_keys": len(result.duplicate_material_keys),
+            "add_candidates": len(result.would_be_added),
+            "update_candidates": len(result.would_be_updated),
+            "unchanged_rows": len(result.would_be_unchanged),
+            "skipped_rows": len(skipped_rows),
+        },
+        "warnings": _sandbox_warnings(result),
+        "duplicate_material_keys": [
+            {
+                "material_key": issue.material_key,
+                "rows": issue.rows,
+            }
+            for issue in result.duplicate_material_keys
+        ],
+        "add_candidates": [_change_to_dict(change) for change in result.would_be_added],
+        "update_candidates": [_change_to_dict(change) for change in result.would_be_updated],
+        "unchanged_rows": [_change_to_dict(change) for change in result.would_be_unchanged],
+        "skipped_rows": skipped_rows,
+        "confirmation_checklist": _confirmation_checklist(),
+        "sandbox_boundaries": [
+            "No live JSON mutation.",
+            "No production pricing mutation.",
+            "No import/apply command is executed by this plan.",
+        ],
+    }
 
 
 def _read_csv_rows(csv_path: str) -> List[Tuple[int, Dict[str, str]]]:
@@ -481,3 +665,145 @@ def _pricing_change_section(title: str, changes: List[PricingChange]) -> str:
 
 def _format_decimal(value: Decimal) -> str:
     return format(value, "f")
+
+
+def _generated_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _validate_sandbox_output_path(path: str, overwrite: bool = False) -> None:
+    if not path or not path.strip():
+        raise ValueError("sandbox apply plan output path is required")
+
+    normalized_path = os.path.normpath(os.path.abspath(path))
+    path_parts = {part.lower() for part in normalized_path.split(os.sep)}
+    filename = os.path.basename(normalized_path).lower()
+
+    if path_parts.intersection(LIVE_OUTPUT_PATH_PARTS) or filename in LIVE_OUTPUT_FILENAMES:
+        raise ValueError(
+            "sandbox apply plan output path appears to target live or production pricing data"
+        )
+
+    if os.path.exists(normalized_path) and not overwrite:
+        raise FileExistsError(
+            "refusing to overwrite existing sandbox apply plan output without --overwrite"
+        )
+
+
+def _read_optional_dry_run_report(path: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not path:
+        return None
+
+    with open(path, "r", encoding="utf-8") as file:
+        content = file.read()
+
+    return {
+        "path": path,
+        "bytes_read": len(content.encode("utf-8")),
+    }
+
+
+def _dry_run_report_label(info: Optional[Dict[str, Any]]) -> str:
+    if not info:
+        return "not provided"
+    return f"{info['path']} ({info['bytes_read']} bytes read)"
+
+
+def _sandbox_warnings(result: OwnerPricingDryRunResult) -> List[str]:
+    warnings = [
+        "Sandbox plan only; live import remains disabled.",
+    ]
+    if result.invalid_rows:
+        warnings.append("Invalid rows exist; future apply is not recommended until they are fixed.")
+    if result.duplicate_material_keys:
+        warnings.append("Duplicate material keys exist; owner/G2 review is required.")
+    if not result.current_pricing:
+        warnings.append("No baseline pricing snapshot was provided; all valid rows are treated as add candidates.")
+    if result.current_pricing and result.current_records_read == 0:
+        warnings.append("Baseline pricing snapshot was provided but no comparable records were read.")
+    return warnings
+
+
+def _skipped_rows(result: OwnerPricingDryRunResult) -> List[Dict[str, Any]]:
+    skipped_by_row: Dict[int, Dict[str, Any]] = {}
+
+    for issue in result.missing_required_fields:
+        skipped_by_row[issue.row_number] = {
+            "row_number": issue.row_number,
+            "material_key": issue.material_key,
+            "reason": f"missing required fields: {', '.join(issue.fields)}",
+        }
+
+    for issue in result.price_format_issues:
+        skipped_by_row[issue.row_number] = {
+            "row_number": issue.row_number,
+            "material_key": issue.material_key,
+            "reason": f"price format issue: {issue.issue}",
+        }
+
+    for issue in result.duplicate_material_keys:
+        for row_number in issue.rows:
+            skipped_by_row[row_number] = {
+                "row_number": row_number,
+                "material_key": issue.material_key,
+                "reason": "duplicate material_key requires manual review",
+            }
+
+    return [
+        skipped_by_row[row_number]
+        for row_number in sorted(skipped_by_row)
+    ]
+
+
+def _skipped_rows_section(skipped_rows: List[Dict[str, Any]]) -> str:
+    lines = [
+        "## Skipped Rows",
+        "",
+    ]
+    if not skipped_rows:
+        lines.extend(["None.", ""])
+        return "\n".join(lines)
+
+    lines.extend(["| CSV row | Material key | Reason |", "| ---: | --- | --- |"])
+    for row in skipped_rows:
+        lines.append(
+            f"| {row['row_number']} | `{row['material_key'] or '(blank)'}` | {row['reason']} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _bullet_lines(items: List[str]) -> List[str]:
+    if not items:
+        return ["- None."]
+    return [f"- {item}" for item in items]
+
+
+def _confirmation_checklist() -> List[str]:
+    return [
+        "Owner confirms the source CSV is the intended file.",
+        "Owner confirms no real pricing sample is committed to the repository.",
+        "G2 reviews invalid rows, duplicate keys, and skipped rows.",
+        "G2 confirms add/update/unchanged candidates match the dry-run report.",
+        "A future apply command, if approved, writes to sandbox output only.",
+        "Rollback approach is documented before any production import is considered.",
+    ]
+
+
+def _checklist_lines(items: List[str]) -> List[str]:
+    return [f"- [ ] {item}" for item in items]
+
+
+def _change_to_dict(change: PricingChange) -> Dict[str, Any]:
+    return {
+        "material_key": change.material_key,
+        "material_name": change.material_name,
+        "unit": change.unit,
+        "current_price": (
+            _format_decimal(change.current_price)
+            if change.current_price is not None
+            else None
+        ),
+        "new_price": _format_decimal(change.new_price),
+        "changed_fields": change.changed_fields or [],
+    }
