@@ -27,3 +27,7 @@ data/owner_pricing/private/
 *.owner-pricing-approval-record.md
 *.owner-pricing-preflight-report.md
 *.owner-pricing-preflight-report.json
+*.owner-pricing-fake-rehearsal-report.md
+*.owner-pricing-fake-rehearsal-audit.json
+*.owner-pricing-fake-rehearsal-output.csv
+*.owner-pricing-fake-rehearsal-backup.csv
