@@ -42,3 +42,26 @@ rehearsal; it is not production import. The current safe workflow remains:
 ```bash
 python -m unittest discover tests
 ```
+
+## Engineering Validation
+
+Pull requests run GitHub Actions on Python 3.12:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m unittest discover tests
+ruff check .
+```
+
+Local recommended checks:
+
+```bash
+py -3.12 -m pip install -e ".[dev]"
+py -3.12 -m unittest discover tests
+ruff check .
+git diff --check
+```
+
+Ruff is check-only in the current workflow foundation. It does not auto-fix or
+enforce formatting yet. Optional pre-commit hooks are documented in
+`docs/ENGINEERING_WORKFLOW.md`.
