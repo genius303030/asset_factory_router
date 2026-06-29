@@ -142,6 +142,19 @@ def main():
     # List-providers command
     subparsers.add_parser("list-providers", parents=[parent_parser], help="List all registered providers")
 
+    # Owner pricing dry-run command
+    owner_pricing_parser = subparsers.add_parser(
+        "owner-pricing-dry-run",
+        parents=[parent_parser],
+        help="Validate an owner pricing CSV and write a dry-run preview report",
+    )
+    owner_pricing_parser.add_argument("--csv", required=True, help="Path to the owner pricing CSV file")
+    owner_pricing_parser.add_argument(
+        "--current-pricing",
+        help="Optional read-only current pricing snapshot, as CSV or JSON",
+    )
+    owner_pricing_parser.add_argument("--report", required=True, help="Path to write the markdown preview report")
+
     args = parser.parse_args()
     
     setup_logging(args.debug)
@@ -169,6 +182,18 @@ def main():
             print("\n--- Registered Providers ---")
             for p in registry.list_all():
                 print(f"- {p.name}: Tasks={p.supported_tasks}, Quality={p.quality_level}, Speed={p.speed_level}, Cost={p.cost_level}")
+        elif args.command == "owner-pricing-dry-run":
+            from .owner_pricing import dry_run_owner_pricing_import, write_preview_report
+            result = dry_run_owner_pricing_import(args.csv, args.current_pricing)
+            write_preview_report(result, args.report)
+            print("\n--- Owner Pricing Dry-run Preview ---")
+            print(f"Report: {args.report}")
+            print(f"CSV rows read: {result.rows_read}")
+            print(f"Valid rows: {result.valid_rows}")
+            print(f"Invalid rows: {result.invalid_rows}")
+            print(f"Would be added: {len(result.would_be_added)}")
+            print(f"Would be updated: {len(result.would_be_updated)}")
+            print(f"Would be unchanged: {len(result.would_be_unchanged)}")
         else:
             parser.print_help()
     except Exception as e:
