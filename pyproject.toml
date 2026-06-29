@@ -10,9 +10,31 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.7,<5",
+    "ruff>=0.8,<1",
+]
+
 [project.scripts]
 asset-factory = "asset_factory.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["asset_factory*"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+extend-exclude = [
+    "build",
+    "dist",
+    "output",
+    "outputs",
+    "owner_pricing_private",
+]
+
+[tool.ruff.lint]
+# G1-029 starts with a conservative, check-only foundation. These rules catch
+# syntax-level and undefined-name problems without forcing a broad style cleanup.
+select = ["E9", "F63", "F7", "F82"]
