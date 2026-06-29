@@ -24,7 +24,8 @@ pip install -e .
 
 Final import is still not implemented. G1-025 adds final import planning docs,
 rollback planning, and a checklist. G1-026 adds a read-only final import
-preflight checker. The current safe workflow remains:
+preflight checker. G1-027 adds the final import design gate before any future
+production import implementation. The current safe workflow remains:
 
 1. Dry-run preview.
 2. Sandbox apply plan.
@@ -32,6 +33,7 @@ preflight checker. The current safe workflow remains:
 4. Approval gate.
 5. Final import planning.
 6. Final import preflight checker.
+7. Final import design gate.
 
 ## Testing
 ```bash
