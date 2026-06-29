@@ -1,0 +1,149 @@
+{
+  "output_type": "owner_pricing_sandbox_apply_output",
+  "sandbox_only": true,
+  "sandbox_notice": "Sandbox output only. This file is not production pricing data and final import remains disabled.",
+  "generated_at": "2026-06-29T15:42:30+00:00",
+  "source_csv_path": "examples\\owner_pricing\\fake_owner_pricing.csv",
+  "baseline_pricing_path": "examples\\owner_pricing\\fake_current_pricing.csv",
+  "sandbox_apply_plan": {
+    "path": "examples\\owner_pricing\\fake_sandbox_apply_plan.md",
+    "bytes_read": 2881
+  },
+  "sandbox_pricing_output_path": "examples\\owner_pricing\\fake_sandbox_pricing_output.json",
+  "live_json_mutated": false,
+  "production_pricing_mutated": false,
+  "final_import_enabled": false,
+  "summary": {
+    "total_rows_read": 7,
+    "valid_rows_applied": 3,
+    "invalid_rows_skipped": 4,
+    "duplicate_keys": 1,
+    "added_materials": 1,
+    "updated_materials": 1,
+    "unchanged_materials": 1,
+    "retained_baseline_materials": 1,
+    "skipped_rows": 4,
+    "sandbox_materials_written": 4
+  },
+  "warnings": [
+    "Sandbox output only; final import remains disabled.",
+    "Invalid rows were skipped and were not applied into sandbox output.",
+    "Duplicate material keys were skipped and require owner/G2 review."
+  ],
+  "materials": [
+    {
+      "material_key": "sample_concrete",
+      "material_name": "Demo Concrete",
+      "unit": "bags",
+      "unit_price": "125.50",
+      "sandbox_status": "updated",
+      "changed_fields": [
+        "unit_price"
+      ]
+    },
+    {
+      "material_key": "sample_old_only",
+      "material_name": "Demo Existing Only",
+      "unit": "liter",
+      "unit_price": "10.00",
+      "sandbox_status": "baseline_retained",
+      "changed_fields": []
+    },
+    {
+      "material_key": "sample_sand",
+      "material_name": "Demo Sand",
+      "unit": "m3",
+      "unit_price": "42.00",
+      "sandbox_status": "added",
+      "changed_fields": []
+    },
+    {
+      "material_key": "sample_unchanged",
+      "material_name": "Demo Unchanged",
+      "unit": "kg",
+      "unit_price": "30.00",
+      "sandbox_status": "unchanged",
+      "changed_fields": []
+    }
+  ],
+  "added_materials": [
+    {
+      "material_key": "sample_sand",
+      "material_name": "Demo Sand",
+      "unit": "m3",
+      "current_price": null,
+      "new_price": "42.00",
+      "changed_fields": []
+    }
+  ],
+  "updated_materials": [
+    {
+      "material_key": "sample_concrete",
+      "material_name": "Demo Concrete",
+      "unit": "bags",
+      "current_price": "120.00",
+      "new_price": "125.50",
+      "changed_fields": [
+        "unit_price"
+      ]
+    }
+  ],
+  "unchanged_materials": [
+    {
+      "material_key": "sample_unchanged",
+      "material_name": "Demo Unchanged",
+      "unit": "kg",
+      "current_price": "30.00",
+      "new_price": "30.00",
+      "changed_fields": []
+    }
+  ],
+  "retained_baseline_materials": [
+    {
+      "material_key": "sample_old_only",
+      "material_name": "Demo Existing Only",
+      "unit": "liter",
+      "unit_price": "10.00",
+      "sandbox_status": "baseline_retained",
+      "changed_fields": []
+    }
+  ],
+  "skipped_rows": [
+    {
+      "row_number": 3,
+      "material_key": "sample_rebar",
+      "reason": "duplicate material_key requires manual review"
+    },
+    {
+      "row_number": 5,
+      "material_key": "sample_rebar",
+      "reason": "duplicate material_key requires manual review"
+    },
+    {
+      "row_number": 6,
+      "material_key": "sample_missing_unit",
+      "reason": "missing required fields: unit"
+    },
+    {
+      "row_number": 7,
+      "material_key": "sample_bad_price",
+      "reason": "price format issue: unit_price must be a plain decimal number"
+    }
+  ],
+  "duplicate_material_keys": [
+    {
+      "material_key": "sample_rebar",
+      "rows": [
+        3,
+        5
+      ]
+    }
+  ],
+  "sandbox_boundaries": [
+    "No live JSON mutation.",
+    "No production pricing mutation.",
+    "Invalid rows are skipped.",
+    "Duplicate material keys are skipped until owner/G2 review resolves them.",
+    "Final import remains disabled."
+  ]
+}
