@@ -258,6 +258,48 @@ def main():
         help="Allow overwriting an existing approval record output",
     )
 
+    # Owner pricing final import preflight command
+    owner_pricing_preflight_parser = subparsers.add_parser(
+        "owner-pricing-final-import-preflight",
+        aliases=["owner-pricing-preflight-final-import"],
+        parents=[parent_parser],
+        help="Run a read-only preflight check before any future owner pricing final import",
+    )
+    owner_pricing_preflight_parser.add_argument(
+        "--sandbox-output",
+        required=True,
+        help="Path to the sandbox pricing output JSON",
+    )
+    owner_pricing_preflight_parser.add_argument(
+        "--approval-record",
+        required=True,
+        help="Path to the owner approval record JSON",
+    )
+    owner_pricing_preflight_parser.add_argument(
+        "--production-target",
+        required=True,
+        help="Explicit production pricing target path to inspect read-only",
+    )
+    owner_pricing_preflight_parser.add_argument(
+        "--backup-output",
+        required=True,
+        help="Explicit future backup path to validate without writing",
+    )
+    owner_pricing_preflight_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to write the markdown preflight report",
+    )
+    owner_pricing_preflight_parser.add_argument(
+        "--report-json",
+        help="Optional path to write a JSON preflight report",
+    )
+    owner_pricing_preflight_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting existing preflight report outputs",
+    )
+
     args = parser.parse_args()
     
     setup_logging(args.debug)
@@ -389,6 +431,36 @@ def main():
             print("Final import enabled: false")
             print("Live JSON mutated: false")
             print("Production pricing mutated: false")
+        elif args.command in (
+            "owner-pricing-final-import-preflight",
+            "owner-pricing-preflight-final-import",
+        ):
+            import sys
+            from .owner_pricing import write_owner_pricing_final_import_preflight
+            try:
+                result = write_owner_pricing_final_import_preflight(
+                    sandbox_output_path=args.sandbox_output,
+                    approval_record_path=args.approval_record,
+                    production_target_path=args.production_target,
+                    backup_output_path=args.backup_output,
+                    report_path=args.report,
+                    report_json_path=args.report_json,
+                    overwrite=args.overwrite,
+                )
+            except Exception as e:
+                print(f"Error: {str(e)}", file=sys.stderr)
+                raise SystemExit(1)
+
+            print("\n--- Owner Pricing Final Import Preflight ---")
+            print(f"Status: {'PASS' if result.passed else 'FAIL'}")
+            print(f"Report: {args.report}")
+            if args.report_json:
+                print(f"Report JSON: {args.report_json}")
+            print(f"Sandbox output SHA-256: {result.sandbox_output_sha256}")
+            print(f"Approval record SHA-256: {result.approval_record_sha256}")
+            print(f"Production target SHA-256: {result.production_target_sha256}")
+            print("No final import command invoked.")
+            print("No production write performed.")
         else:
             parser.print_help()
     except Exception as e:

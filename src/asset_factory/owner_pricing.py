@@ -111,6 +111,18 @@ class OwnerPricingApprovalRecordResult:
     approved_by: str
 
 
+@dataclass
+class OwnerPricingPreflightResult:
+    passed: bool
+    report_path: str
+    report_json_path: Optional[str]
+    sandbox_output_sha256: Optional[str]
+    approval_record_sha256: Optional[str]
+    production_target_sha256: Optional[str]
+    blockers: List[str]
+    warnings: List[str]
+
+
 LIVE_OUTPUT_PATH_PARTS = {
     "config",
     "data",
@@ -419,6 +431,104 @@ def write_owner_pricing_approval_record(
         generated_at=generated_at,
         approved_by=approved_by,
     )
+
+
+def write_owner_pricing_final_import_preflight(
+    sandbox_output_path: str,
+    approval_record_path: str,
+    production_target_path: str,
+    backup_output_path: str,
+    report_path: str,
+    report_json_path: Optional[str] = None,
+    overwrite: bool = False,
+) -> OwnerPricingPreflightResult:
+    _validate_sandbox_output_path(
+        report_path,
+        overwrite=overwrite,
+        output_kind="owner pricing preflight report",
+    )
+    if report_json_path:
+        _validate_sandbox_output_path(
+            report_json_path,
+            overwrite=overwrite,
+            output_kind="owner pricing preflight JSON report",
+        )
+    _validate_distinct_output_paths(
+        [
+            ("sandbox output", sandbox_output_path),
+            ("approval record", approval_record_path),
+            ("production target", production_target_path),
+            ("expected backup output", backup_output_path),
+            ("owner pricing preflight report", report_path),
+            ("owner pricing preflight JSON report", report_json_path),
+        ]
+    )
+    _validate_readonly_pricing_path(
+        production_target_path,
+        path_kind="production target",
+        must_exist=True,
+    )
+    _validate_backup_output_path(backup_output_path)
+
+    sandbox_output, sandbox_output_sha256 = _load_validated_sandbox_output(
+        sandbox_output_path
+    )
+    approval_record, approval_record_sha256 = _load_json_file_with_sha256(
+        approval_record_path,
+        input_kind="approval record",
+    )
+    production_target_sha256 = _file_sha256(production_target_path)
+    production_records = _load_current_pricing(production_target_path)
+
+    generated_at = _generated_timestamp()
+    validation_results, blockers, warnings = _build_preflight_validations(
+        sandbox_output=sandbox_output,
+        sandbox_output_path=sandbox_output_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        approval_record=approval_record,
+        approval_record_path=approval_record_path,
+        production_target_path=production_target_path,
+        production_records=production_records,
+        backup_output_path=backup_output_path,
+    )
+    passed = not blockers
+    preflight = build_owner_pricing_preflight_json(
+        passed=passed,
+        generated_at=generated_at,
+        sandbox_output_path=sandbox_output_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        approval_record_path=approval_record_path,
+        approval_record_sha256=approval_record_sha256,
+        production_target_path=production_target_path,
+        production_target_sha256=production_target_sha256,
+        production_records_read=len(production_records),
+        backup_output_path=backup_output_path,
+        report_path=report_path,
+        report_json_path=report_json_path,
+        validation_results=validation_results,
+        blockers=blockers,
+        warnings=warnings,
+    )
+
+    _write_text_file(report_path, build_owner_pricing_preflight_report(preflight))
+    if report_json_path:
+        _write_json_file(report_json_path, preflight)
+
+    result = OwnerPricingPreflightResult(
+        passed=passed,
+        report_path=report_path,
+        report_json_path=report_json_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        approval_record_sha256=approval_record_sha256,
+        production_target_sha256=production_target_sha256,
+        blockers=blockers,
+        warnings=warnings,
+    )
+
+    if not passed:
+        raise ValueError("owner pricing final import preflight failed")
+
+    return result
 
 
 def build_preview_report(result: OwnerPricingDryRunResult) -> str:
@@ -822,6 +932,119 @@ def build_owner_pricing_approval_record_markdown(
     return "\n".join(lines)
 
 
+def build_owner_pricing_preflight_json(
+    passed: bool,
+    generated_at: str,
+    sandbox_output_path: str,
+    sandbox_output_sha256: str,
+    approval_record_path: str,
+    approval_record_sha256: str,
+    production_target_path: str,
+    production_target_sha256: str,
+    production_records_read: int,
+    backup_output_path: str,
+    report_path: str,
+    report_json_path: Optional[str],
+    validation_results: List[Dict[str, Any]],
+    blockers: List[str],
+    warnings: List[str],
+) -> Dict[str, Any]:
+    return {
+        "preflight_type": "owner_pricing_final_import_preflight",
+        "status": "PASS" if passed else "FAIL",
+        "generated_at": generated_at,
+        "checked_paths": {
+            "sandbox_output": sandbox_output_path,
+            "approval_record": approval_record_path,
+            "production_target": production_target_path,
+            "backup_output": backup_output_path,
+            "report": report_path,
+            "report_json": report_json_path,
+        },
+        "checksums": {
+            "sandbox_output_sha256": sandbox_output_sha256,
+            "approval_record_sha256": approval_record_sha256,
+            "production_target_sha256": production_target_sha256,
+        },
+        "production_records_read": production_records_read,
+        "expected_backup_path": backup_output_path,
+        "validation_results": validation_results,
+        "blockers": blockers,
+        "warnings": warnings,
+        "final_import_command_invoked": False,
+        "production_write_performed": False,
+        "live_json_mutated": False,
+        "production_pricing_mutated": False,
+        "backup_written": False,
+        "next_safe_step": (
+            "Proceed to G2/G0 review of this preflight report; final import remains disabled."
+            if passed
+            else "Resolve blockers and rerun preflight; do not run final import."
+        ),
+    }
+
+
+def build_owner_pricing_preflight_report(preflight: Dict[str, Any]) -> str:
+    lines = [
+        "# Owner Pricing Final Import Preflight Report",
+        "",
+        "Preflight report only. No production write was performed.",
+        "",
+        "## Status",
+        "",
+        f"- Result: `{preflight['status']}`",
+        f"- Generated at: `{preflight['generated_at']}`",
+        f"- Next safe step: {preflight['next_safe_step']}",
+        "",
+        "## Checked Paths",
+        "",
+        f"- Sandbox output: `{preflight['checked_paths']['sandbox_output']}`",
+        f"- Approval record: `{preflight['checked_paths']['approval_record']}`",
+        f"- Production target: `{preflight['checked_paths']['production_target']}`",
+        f"- Expected backup path: `{preflight['checked_paths']['backup_output']}`",
+        f"- Markdown report: `{preflight['checked_paths']['report']}`",
+        f"- JSON report: `{preflight['checked_paths']['report_json'] or 'not requested'}`",
+        "",
+        "## Checksums",
+        "",
+        f"- Sandbox output SHA-256: `{preflight['checksums']['sandbox_output_sha256']}`",
+        f"- Approval record SHA-256: `{preflight['checksums']['approval_record_sha256']}`",
+        f"- Production target SHA-256: `{preflight['checksums']['production_target_sha256']}`",
+        "",
+        "## Validation Results",
+        "",
+        "| Check | Status | Detail |",
+        "| --- | --- | --- |",
+    ]
+    for item in preflight["validation_results"]:
+        lines.append(
+            f"| {item['check']} | {item['status']} | {item['detail']} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Blockers",
+            "",
+            *_bullet_lines(preflight["blockers"]),
+            "",
+            "## Warnings",
+            "",
+            *_bullet_lines(preflight["warnings"]),
+            "",
+            "## Safety Statement",
+            "",
+            "- No final import command was invoked.",
+            "- No production write was performed.",
+            "- No live JSON was mutated.",
+            "- No production pricing data was mutated.",
+            "- Backup path was validated only; backup was not written.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _read_csv_rows(csv_path: str) -> List[Tuple[int, Dict[str, str]]]:
     with open(csv_path, "r", encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
@@ -1217,6 +1440,307 @@ def _validate_distinct_output_paths(paths: List[Tuple[str, Optional[str]]]) -> N
                 f"{output_kind} path must be different from {seen_paths[normalized_path]}"
             )
         seen_paths[normalized_path] = output_kind
+
+
+def _validate_readonly_pricing_path(
+    path: str,
+    path_kind: str,
+    must_exist: bool,
+) -> None:
+    if not path or not path.strip():
+        raise ValueError(f"{path_kind} path is required")
+
+    normalized_path = os.path.normpath(os.path.abspath(path))
+    path_parts = {part.lower() for part in normalized_path.split(os.sep)}
+    if path_parts.intersection(LIVE_OUTPUT_PATH_PARTS):
+        raise ValueError(f"{path_kind} path appears unsafe")
+
+    extension = os.path.splitext(normalized_path)[1].lower()
+    if extension not in {".csv", ".json"}:
+        raise ValueError(f"{path_kind} must be a CSV or JSON file")
+
+    if must_exist and not os.path.exists(normalized_path):
+        raise FileNotFoundError(f"{path_kind} file does not exist")
+
+
+def _validate_backup_output_path(path: str) -> None:
+    _validate_sandbox_output_path(
+        path,
+        overwrite=False,
+        output_kind="backup output",
+    )
+
+
+def _load_json_file_with_sha256(
+    path: str,
+    input_kind: str,
+) -> Tuple[Dict[str, Any], str]:
+    if not path or not path.strip():
+        raise ValueError(f"{input_kind} path is required")
+    normalized_path = os.path.normpath(os.path.abspath(path))
+    if not os.path.exists(normalized_path):
+        raise FileNotFoundError(f"{input_kind} file does not exist")
+    if os.path.splitext(normalized_path)[1].lower() != ".json":
+        raise ValueError(f"{input_kind} must be JSON")
+
+    with open(normalized_path, "rb") as file:
+        raw_content = file.read()
+
+    try:
+        data = json.loads(raw_content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{input_kind} must be JSON") from exc
+
+    if not isinstance(data, dict):
+        raise ValueError(f"{input_kind} JSON must be an object")
+
+    return data, hashlib.sha256(raw_content).hexdigest()
+
+
+def _file_sha256(path: str) -> str:
+    with open(path, "rb") as file:
+        return hashlib.sha256(file.read()).hexdigest()
+
+
+def _build_preflight_validations(
+    sandbox_output: Dict[str, Any],
+    sandbox_output_path: str,
+    sandbox_output_sha256: str,
+    approval_record: Dict[str, Any],
+    approval_record_path: str,
+    production_target_path: str,
+    production_records: Dict[str, CurrentPricingRow],
+    backup_output_path: str,
+) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    validation_results: List[Dict[str, Any]] = []
+    blockers: List[str] = []
+    warnings: List[str] = []
+
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "sandbox output is sandbox-only",
+        sandbox_output.get("sandbox_only") is True,
+        "sandbox_only is true",
+        "sandbox output must declare sandbox_only true",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "final import remains disabled in sandbox output",
+        sandbox_output.get("final_import_enabled") is False,
+        "final_import_enabled is false",
+        "sandbox output must declare final_import_enabled false",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "live JSON mutation flag remains false",
+        sandbox_output.get("live_json_mutated") is False,
+        "live_json_mutated is false",
+        "sandbox output must declare live_json_mutated false",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "production pricing mutation flag remains false",
+        sandbox_output.get("production_pricing_mutated") is False,
+        "production_pricing_mutated is false",
+        "sandbox output must declare production_pricing_mutated false",
+    )
+
+    approval_sandbox = approval_record.get("sandbox_output", {})
+    approval_sha = approval_sandbox.get("sha256")
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "approval checksum matches sandbox output",
+        approval_sha == sandbox_output_sha256,
+        "approval checksum matches sandbox output bytes",
+        "approval checksum does not match sandbox output bytes",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "approval record references intended sandbox output",
+        _paths_match(approval_sandbox.get("path"), sandbox_output_path),
+        "approval record references the intended sandbox output",
+        "approval record does not reference the intended sandbox output",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "approval record final import flag remains false",
+        approval_record.get("final_import_enabled") is False,
+        "approval record final_import_enabled is false",
+        "approval record must declare final_import_enabled false",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "approval record live JSON mutation flag remains false",
+        approval_record.get("live_json_mutated") is False,
+        "approval record live_json_mutated is false",
+        "approval record must declare live_json_mutated false",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "approval record production pricing mutation flag remains false",
+        approval_record.get("production_pricing_mutated") is False,
+        "approval record production_pricing_mutated is false",
+        "approval record must declare production_pricing_mutated false",
+    )
+
+    materials = sandbox_output.get("materials", [])
+    material_keys = _material_keys(materials)
+    duplicate_keys = sorted(
+        key
+        for key, count in _count_items(_normalize_key(key) for key in material_keys).items()
+        if count > 1
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "sandbox material keys are unique",
+        not duplicate_keys,
+        "sandbox material keys are unique",
+        f"duplicate sandbox material keys: {', '.join(duplicate_keys)}",
+    )
+
+    skipped_material_keys = {
+        _normalize_key(str(row.get("material_key", "")))
+        for row in sandbox_output.get("skipped_rows", [])
+        if row.get("material_key")
+    }
+    material_key_set = {_normalize_key(key) for key in material_keys}
+    skipped_present = sorted(skipped_material_keys.intersection(material_key_set))
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "skipped invalid rows are not present in sandbox materials",
+        not skipped_present,
+        "skipped invalid rows are not present in materials",
+        f"skipped invalid material keys appear in materials: {', '.join(skipped_present)}",
+    )
+
+    summary = sandbox_output.get("summary", {})
+    status_counts = _sandbox_material_status_counts(materials)
+    expected_counts = {
+        "added_materials": status_counts.get("added", 0),
+        "updated_materials": status_counts.get("updated", 0),
+        "unchanged_materials": status_counts.get("unchanged", 0),
+        "retained_baseline_materials": status_counts.get("baseline_retained", 0),
+        "sandbox_materials_written": len(materials),
+        "skipped_rows": len(sandbox_output.get("skipped_rows", [])),
+    }
+    mismatched_counts = [
+        f"{field}: summary={summary.get(field)} actual={actual_count}"
+        for field, actual_count in expected_counts.items()
+        if summary.get(field) != actual_count
+    ]
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "sandbox summary counts match materials",
+        not mismatched_counts,
+        "sandbox summary counts match material lists",
+        "; ".join(mismatched_counts),
+    )
+
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "production target was inspected read-only",
+        True,
+        f"read {len(production_records)} comparable production records",
+        "",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "backup output path is available and not written",
+        not os.path.exists(os.path.abspath(backup_output_path)),
+        "backup path is available; no backup was written",
+        "backup output path already exists",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "no final import command invoked",
+        True,
+        "preflight checker does not invoke final import",
+        "",
+    )
+    _add_preflight_check(
+        validation_results,
+        blockers,
+        "no production write occurred",
+        True,
+        "production target was read only",
+        "",
+    )
+
+    if not production_records:
+        warnings.append("Production target was readable but no comparable pricing records were parsed.")
+    if approval_record.get("approval_type") != "owner_pricing_sandbox_output_approval":
+        warnings.append("Approval record type is not the expected owner pricing sandbox approval type.")
+    if approval_record_path and not approval_record.get("approved_by"):
+        warnings.append("Approval record has no approved_by value.")
+
+    return validation_results, blockers, warnings
+
+
+def _add_preflight_check(
+    validation_results: List[Dict[str, Any]],
+    blockers: List[str],
+    check: str,
+    passed: bool,
+    pass_detail: str,
+    fail_detail: str,
+) -> None:
+    validation_results.append(
+        {
+            "check": check,
+            "status": "PASS" if passed else "FAIL",
+            "detail": pass_detail if passed else fail_detail,
+        }
+    )
+    if not passed:
+        blockers.append(fail_detail)
+
+
+def _material_keys(materials: Any) -> List[str]:
+    if not isinstance(materials, list):
+        return []
+    return [
+        str(material.get("material_key", ""))
+        for material in materials
+        if isinstance(material, dict) and material.get("material_key")
+    ]
+
+
+def _sandbox_material_status_counts(materials: Any) -> Dict[str, int]:
+    if not isinstance(materials, list):
+        return {}
+    return _count_items(
+        str(material.get("sandbox_status", ""))
+        for material in materials
+        if isinstance(material, dict)
+    )
+
+
+def _count_items(items) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for item in items:
+        counts[item] = counts.get(item, 0) + 1
+    return counts
+
+
+def _paths_match(left: Optional[str], right: str) -> bool:
+    if not left or not right:
+        return False
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(os.path.abspath(right))
 
 
 def _load_validated_sandbox_output(sandbox_output_path: str) -> Tuple[Dict[str, Any], str]:

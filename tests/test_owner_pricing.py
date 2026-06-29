@@ -9,6 +9,7 @@ import unittest
 from asset_factory.owner_pricing import (
     OWNER_PRICING_APPROVAL_PHRASE,
     dry_run_owner_pricing_import,
+    write_owner_pricing_final_import_preflight,
     write_owner_pricing_approval_record,
     write_sandbox_apply_output,
     write_sandbox_apply_plan,
@@ -937,7 +938,7 @@ class TestOwnerPricingDryRun(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertNotIn("final-import", result.stdout)
+        self.assertNotRegex(result.stdout, r"owner-pricing-final-import(?!-preflight)")
         self.assertNotIn("production-import", result.stdout)
 
     def test_fake_example_approval_record_is_committed_output_shape(self):
@@ -963,6 +964,488 @@ class TestOwnerPricingDryRun(unittest.TestCase):
         self.assertFalse(approval_record["final_import_enabled"])
         self.assertFalse(approval_record["live_json_mutated"])
         self.assertFalse(approval_record["production_pricing_mutated"])
+
+    def _fake_sandbox_output_path(self):
+        return os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+
+    def _fake_approval_record_path(self):
+        return os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_owner_pricing_approval_record.json",
+        )
+
+    def _write_temp_production_target(self):
+        production_target_path = os.path.join(self.test_dir.name, "production_target.csv")
+        with open(production_target_path, "w", encoding="utf-8") as file:
+            file.write(CURRENT_PRICING_SAMPLE)
+        return production_target_path
+
+    def _write_matching_temp_approval_record(self, sandbox_output_path):
+        with open(self._fake_approval_record_path(), "r", encoding="utf-8") as file:
+            approval_record = json.load(file)
+        with open(sandbox_output_path, "rb") as file:
+            sandbox_sha256 = hashlib.sha256(file.read()).hexdigest()
+
+        approval_record["sandbox_output"]["path"] = sandbox_output_path
+        approval_record["sandbox_output"]["sha256"] = sandbox_sha256
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+        with open(approval_record_path, "w", encoding="utf-8") as file:
+            json.dump(approval_record, file, indent=2)
+            file.write("\n")
+        return approval_record_path
+
+    def test_preflight_command_success_with_fake_files(self):
+        production_target_path = self._write_temp_production_target()
+        report_path = os.path.join(self.test_dir.name, "preflight_report.md")
+        report_json_path = os.path.join(self.test_dir.name, "preflight_report.json")
+        backup_output_path = os.path.join(self.test_dir.name, "future_backup.json")
+
+        result = write_owner_pricing_final_import_preflight(
+            sandbox_output_path=self._fake_sandbox_output_path(),
+            approval_record_path=self._fake_approval_record_path(),
+            production_target_path=production_target_path,
+            backup_output_path=backup_output_path,
+            report_path=report_path,
+            report_json_path=report_json_path,
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(result.blockers, [])
+        self.assertTrue(os.path.exists(report_path))
+        self.assertTrue(os.path.exists(report_json_path))
+        self.assertFalse(os.path.exists(backup_output_path))
+
+        with open(report_path, "r", encoding="utf-8") as file:
+            report = file.read()
+        self.assertIn("Result: `PASS`", report)
+        self.assertIn("No production write was performed.", report)
+
+        with open(report_json_path, "r", encoding="utf-8") as file:
+            report_json = json.load(file)
+        self.assertEqual(report_json["status"], "PASS")
+        self.assertFalse(report_json["production_write_performed"])
+        self.assertFalse(report_json["live_json_mutated"])
+        self.assertFalse(report_json["production_pricing_mutated"])
+        self.assertFalse(report_json["backup_written"])
+
+    def test_preflight_missing_sandbox_output_fails(self):
+        production_target_path = self._write_temp_production_target()
+
+        with self.assertRaisesRegex(FileNotFoundError, "sandbox output file does not exist"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=os.path.join(self.test_dir.name, "missing.json"),
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_invalid_sandbox_json_fails(self):
+        production_target_path = self._write_temp_production_target()
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.json")
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            file.write("{not json")
+
+        with self.assertRaisesRegex(ValueError, "sandbox output must be JSON"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=sandbox_output_path,
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_sandbox_only_false_fails(self):
+        production_target_path = self._write_temp_production_target()
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.json")
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            json.dump({"sandbox_only": False, "final_import_enabled": False}, file)
+
+        with self.assertRaisesRegex(ValueError, "sandbox_only true"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=sandbox_output_path,
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_final_import_enabled_true_fails(self):
+        production_target_path = self._write_temp_production_target()
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.json")
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            json.dump({"sandbox_only": True, "final_import_enabled": True}, file)
+
+        with self.assertRaisesRegex(ValueError, "final import"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=sandbox_output_path,
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_missing_approval_record_fails(self):
+        production_target_path = self._write_temp_production_target()
+
+        with self.assertRaisesRegex(FileNotFoundError, "approval record file does not exist"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=os.path.join(self.test_dir.name, "missing_approval.json"),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_approval_checksum_mismatch_fails_with_report(self):
+        production_target_path = self._write_temp_production_target()
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+        with open(self._fake_approval_record_path(), "r", encoding="utf-8") as file:
+            approval_record = json.load(file)
+        approval_record["sandbox_output"]["sha256"] = "0" * 64
+        with open(approval_record_path, "w", encoding="utf-8") as file:
+            json.dump(approval_record, file, indent=2)
+            file.write("\n")
+
+        report_path = os.path.join(self.test_dir.name, "preflight_report.md")
+        with self.assertRaisesRegex(ValueError, "preflight failed"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=approval_record_path,
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=report_path,
+            )
+
+        self.assertTrue(os.path.exists(report_path))
+        with open(report_path, "r", encoding="utf-8") as file:
+            report = file.read()
+        self.assertIn("Result: `FAIL`", report)
+        self.assertIn("approval checksum does not match", report)
+
+    def test_preflight_unsafe_production_target_path_fails(self):
+        with self.assertRaisesRegex(ValueError, "production target path appears unsafe"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=os.path.join(self.test_dir.name, "prod", "target.csv"),
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_unsafe_backup_path_fails(self):
+        production_target_path = self._write_temp_production_target()
+
+        with self.assertRaisesRegex(ValueError, "backup output path appears to target live or production"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "live", "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_duplicate_sandbox_material_keys_fail(self):
+        production_target_path = self._write_temp_production_target()
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.json")
+        with open(self._fake_sandbox_output_path(), "r", encoding="utf-8") as file:
+            sandbox_output = json.load(file)
+        sandbox_output["materials"].append(dict(sandbox_output["materials"][0]))
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            json.dump(sandbox_output, file, indent=2)
+            file.write("\n")
+        approval_record_path = self._write_matching_temp_approval_record(sandbox_output_path)
+
+        report_path = os.path.join(self.test_dir.name, "preflight_report.md")
+        with self.assertRaisesRegex(ValueError, "preflight failed"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=sandbox_output_path,
+                approval_record_path=approval_record_path,
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=report_path,
+            )
+
+        with open(report_path, "r", encoding="utf-8") as file:
+            report = file.read()
+        self.assertIn("duplicate sandbox material keys", report)
+
+    def test_preflight_count_mismatch_fails(self):
+        production_target_path = self._write_temp_production_target()
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.json")
+        with open(self._fake_sandbox_output_path(), "r", encoding="utf-8") as file:
+            sandbox_output = json.load(file)
+        sandbox_output["summary"]["added_materials"] = 99
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            json.dump(sandbox_output, file, indent=2)
+            file.write("\n")
+        approval_record_path = self._write_matching_temp_approval_record(sandbox_output_path)
+
+        with self.assertRaisesRegex(ValueError, "preflight failed"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=sandbox_output_path,
+                approval_record_path=approval_record_path,
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+            )
+
+    def test_preflight_report_output_required(self):
+        production_target_path = self._write_temp_production_target()
+
+        with self.assertRaisesRegex(ValueError, "preflight report path is required"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path="",
+            )
+
+    def test_preflight_report_refuses_overwrite_without_flag(self):
+        production_target_path = self._write_temp_production_target()
+        report_path = os.path.join(self.test_dir.name, "preflight_report.md")
+
+        write_owner_pricing_final_import_preflight(
+            sandbox_output_path=self._fake_sandbox_output_path(),
+            approval_record_path=self._fake_approval_record_path(),
+            production_target_path=production_target_path,
+            backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+            report_path=report_path,
+        )
+
+        with self.assertRaisesRegex(FileExistsError, "--overwrite"):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup_2.json"),
+                report_path=report_path,
+            )
+
+    def test_preflight_report_cannot_match_production_target_even_with_overwrite(self):
+        production_target_path = self._write_temp_production_target()
+        with open(production_target_path, "rb") as file:
+            production_before = file.read()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "owner pricing preflight report path must be different from production target",
+        ):
+            write_owner_pricing_final_import_preflight(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                production_target_path=production_target_path,
+                backup_output_path=os.path.join(self.test_dir.name, "future_backup.json"),
+                report_path=production_target_path,
+                overwrite=True,
+            )
+
+        with open(production_target_path, "rb") as file:
+            production_after = file.read()
+        self.assertEqual(production_after, production_before)
+
+    def test_preflight_does_not_mutate_production_or_live_inputs(self):
+        production_target_path = self._write_temp_production_target()
+        with open(production_target_path, "rb") as file:
+            production_before = file.read()
+        with open(self._fake_sandbox_output_path(), "rb") as file:
+            sandbox_before = file.read()
+
+        backup_output_path = os.path.join(self.test_dir.name, "future_backup.json")
+        write_owner_pricing_final_import_preflight(
+            sandbox_output_path=self._fake_sandbox_output_path(),
+            approval_record_path=self._fake_approval_record_path(),
+            production_target_path=production_target_path,
+            backup_output_path=backup_output_path,
+            report_path=os.path.join(self.test_dir.name, "preflight_report.md"),
+        )
+
+        with open(production_target_path, "rb") as file:
+            production_after = file.read()
+        with open(self._fake_sandbox_output_path(), "rb") as file:
+            sandbox_after = file.read()
+
+        self.assertEqual(production_after, production_before)
+        self.assertEqual(sandbox_after, sandbox_before)
+        self.assertFalse(os.path.exists(backup_output_path))
+
+    def test_cli_preflight_success_writes_report(self):
+        production_target_path = self._write_temp_production_target()
+        report_path = os.path.join(self.test_dir.name, "cli_preflight_report.md")
+        report_json_path = os.path.join(self.test_dir.name, "cli_preflight_report.json")
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "owner-pricing-final-import-preflight",
+                "--sandbox-output",
+                self._fake_sandbox_output_path(),
+                "--approval-record",
+                self._fake_approval_record_path(),
+                "--production-target",
+                production_target_path,
+                "--backup-output",
+                os.path.join(self.test_dir.name, "future_backup.json"),
+                "--report",
+                report_path,
+                "--report-json",
+                report_json_path,
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertTrue(os.path.exists(report_path))
+        self.assertTrue(os.path.exists(report_json_path))
+        self.assertIn("Status: PASS", result.stdout)
+        self.assertIn("No production write performed.", result.stdout)
+
+    def test_cli_preflight_checksum_mismatch_fails(self):
+        production_target_path = self._write_temp_production_target()
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+        with open(self._fake_approval_record_path(), "r", encoding="utf-8") as file:
+            approval_record = json.load(file)
+        approval_record["sandbox_output"]["sha256"] = "1" * 64
+        with open(approval_record_path, "w", encoding="utf-8") as file:
+            json.dump(approval_record, file, indent=2)
+            file.write("\n")
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "owner-pricing-final-import-preflight",
+                "--sandbox-output",
+                self._fake_sandbox_output_path(),
+                "--approval-record",
+                approval_record_path,
+                "--production-target",
+                production_target_path,
+                "--backup-output",
+                os.path.join(self.test_dir.name, "future_backup.json"),
+                "--report",
+                os.path.join(self.test_dir.name, "cli_preflight_report.md"),
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("preflight failed", result.stderr)
+
+    def test_cli_preflight_unsafe_paths_fail(self):
+        production_target_path = self._write_temp_production_target()
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        unsafe_target = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "owner-pricing-final-import-preflight",
+                "--sandbox-output",
+                self._fake_sandbox_output_path(),
+                "--approval-record",
+                self._fake_approval_record_path(),
+                "--production-target",
+                os.path.join(self.test_dir.name, "production", "target.csv"),
+                "--backup-output",
+                os.path.join(self.test_dir.name, "future_backup.json"),
+                "--report",
+                os.path.join(self.test_dir.name, "cli_preflight_report.md"),
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        unsafe_backup = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "owner-pricing-final-import-preflight",
+                "--sandbox-output",
+                self._fake_sandbox_output_path(),
+                "--approval-record",
+                self._fake_approval_record_path(),
+                "--production-target",
+                production_target_path,
+                "--backup-output",
+                os.path.join(self.test_dir.name, "prod", "future_backup.json"),
+                "--report",
+                os.path.join(self.test_dir.name, "cli_preflight_report_2.md"),
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertNotEqual(unsafe_target.returncode, 0)
+        self.assertIn("production target path appears unsafe", unsafe_target.stderr)
+        self.assertNotEqual(unsafe_backup.returncode, 0)
+        self.assertIn("backup output path appears to target live or production", unsafe_backup.stderr)
+
+    def test_cli_still_does_not_add_final_import_command(self):
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "--help",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("owner-pricing-final-import-preflight", result.stdout)
+        self.assertNotIn("owner-pricing-final-import,", result.stdout)
+        self.assertNotIn("owner-pricing-final-import ", result.stdout)
+        self.assertNotIn("enable-production-import", result.stdout)
+
+    def test_fake_example_preflight_report_is_committed_output_shape(self):
+        example_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_final_import_preflight_report.json",
+        )
+
+        with open(example_path, "r", encoding="utf-8") as file:
+            preflight = json.load(file)
+
+        self.assertEqual(preflight["preflight_type"], "owner_pricing_final_import_preflight")
+        self.assertEqual(preflight["status"], "PASS")
+        self.assertFalse(preflight["production_write_performed"])
+        self.assertFalse(preflight["live_json_mutated"])
+        self.assertFalse(preflight["production_pricing_mutated"])
 
 
 if __name__ == "__main__":

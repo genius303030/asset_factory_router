@@ -18,17 +18,20 @@ pip install -e .
 - `asset-factory owner-pricing-plan-sandbox-apply --csv <path> --plan <path> [--current-pricing <path>]`
 - `asset-factory owner-pricing-apply-sandbox-output --csv <path> --output <path> [--current-pricing <path>]`
 - `asset-factory owner-pricing-approve-sandbox-output --sandbox-output <path> --owner-approval <phrase> --approval-record <path>`
+- `asset-factory owner-pricing-final-import-preflight --sandbox-output <path> --approval-record <path> --production-target <path> --backup-output <path> --report <path>`
 
 ## Owner Pricing Safety Workflow
 
-Final import is still not implemented. G1-025 only adds final import planning
-docs, rollback planning, and a checklist. The current safe workflow remains:
+Final import is still not implemented. G1-025 adds final import planning docs,
+rollback planning, and a checklist. G1-026 adds a read-only final import
+preflight checker. The current safe workflow remains:
 
 1. Dry-run preview.
 2. Sandbox apply plan.
 3. Sandbox apply output.
 4. Approval gate.
 5. Final import planning.
+6. Final import preflight checker.
 
 ## Testing
 ```bash

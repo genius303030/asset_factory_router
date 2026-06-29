@@ -1,0 +1,110 @@
+{
+  "preflight_type": "owner_pricing_final_import_preflight",
+  "status": "PASS",
+  "generated_at": "2026-06-29T16:23:33+00:00",
+  "checked_paths": {
+    "sandbox_output": "examples\\owner_pricing\\fake_sandbox_pricing_output.json",
+    "approval_record": "examples\\owner_pricing\\fake_owner_pricing_approval_record.json",
+    "production_target": "examples\\owner_pricing\\fake_current_pricing.csv",
+    "backup_output": "outputs\\owner_pricing\\fake_future_backup.json",
+    "report": "examples\\owner_pricing\\fake_final_import_preflight_report.md",
+    "report_json": "examples\\owner_pricing\\fake_final_import_preflight_report.json"
+  },
+  "checksums": {
+    "sandbox_output_sha256": "797a1164dcb965ac190bf5300f8ad3531b2f744874f8e4f8d1b8975743da07ce",
+    "approval_record_sha256": "c4b83d890a984d401af9e2ec0cca7ebd5e369c6c04710daf1aba03046dba052b",
+    "production_target_sha256": "79082f85afb67d1eda64a3800fb74816cbf0a448a434b6abe8ebd18002606f5c"
+  },
+  "production_records_read": 3,
+  "expected_backup_path": "outputs\\owner_pricing\\fake_future_backup.json",
+  "validation_results": [
+    {
+      "check": "sandbox output is sandbox-only",
+      "status": "PASS",
+      "detail": "sandbox_only is true"
+    },
+    {
+      "check": "final import remains disabled in sandbox output",
+      "status": "PASS",
+      "detail": "final_import_enabled is false"
+    },
+    {
+      "check": "live JSON mutation flag remains false",
+      "status": "PASS",
+      "detail": "live_json_mutated is false"
+    },
+    {
+      "check": "production pricing mutation flag remains false",
+      "status": "PASS",
+      "detail": "production_pricing_mutated is false"
+    },
+    {
+      "check": "approval checksum matches sandbox output",
+      "status": "PASS",
+      "detail": "approval checksum matches sandbox output bytes"
+    },
+    {
+      "check": "approval record references intended sandbox output",
+      "status": "PASS",
+      "detail": "approval record references the intended sandbox output"
+    },
+    {
+      "check": "approval record final import flag remains false",
+      "status": "PASS",
+      "detail": "approval record final_import_enabled is false"
+    },
+    {
+      "check": "approval record live JSON mutation flag remains false",
+      "status": "PASS",
+      "detail": "approval record live_json_mutated is false"
+    },
+    {
+      "check": "approval record production pricing mutation flag remains false",
+      "status": "PASS",
+      "detail": "approval record production_pricing_mutated is false"
+    },
+    {
+      "check": "sandbox material keys are unique",
+      "status": "PASS",
+      "detail": "sandbox material keys are unique"
+    },
+    {
+      "check": "skipped invalid rows are not present in sandbox materials",
+      "status": "PASS",
+      "detail": "skipped invalid rows are not present in materials"
+    },
+    {
+      "check": "sandbox summary counts match materials",
+      "status": "PASS",
+      "detail": "sandbox summary counts match material lists"
+    },
+    {
+      "check": "production target was inspected read-only",
+      "status": "PASS",
+      "detail": "read 3 comparable production records"
+    },
+    {
+      "check": "backup output path is available and not written",
+      "status": "PASS",
+      "detail": "backup path is available; no backup was written"
+    },
+    {
+      "check": "no final import command invoked",
+      "status": "PASS",
+      "detail": "preflight checker does not invoke final import"
+    },
+    {
+      "check": "no production write occurred",
+      "status": "PASS",
+      "detail": "production target was read only"
+    }
+  ],
+  "blockers": [],
+  "warnings": [],
+  "final_import_command_invoked": false,
+  "production_write_performed": false,
+  "live_json_mutated": false,
+  "production_pricing_mutated": false,
+  "backup_written": false,
+  "next_safe_step": "Proceed to G2/G0 review of this preflight report; final import remains disabled."
+}
