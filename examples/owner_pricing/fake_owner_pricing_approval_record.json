@@ -1,0 +1,54 @@
+{
+  "approval_type": "owner_pricing_sandbox_output_approval",
+  "sandbox_only": true,
+  "approval_notice": "Manual owner approval record only. This does not enable final import and does not mutate live or production pricing data.",
+  "generated_at": "2026-06-29T15:57:44+00:00",
+  "approved_by": "local owner / manual owner",
+  "approval_phrase_used": "I_APPROVE_SANDBOX_PRICING_OUTPUT",
+  "expected_approval_phrase": "I_APPROVE_SANDBOX_PRICING_OUTPUT",
+  "sandbox_output": {
+    "path": "examples\\owner_pricing\\fake_sandbox_pricing_output.json",
+    "sha256": "797a1164dcb965ac190bf5300f8ad3531b2f744874f8e4f8d1b8975743da07ce",
+    "output_type": "owner_pricing_sandbox_apply_output",
+    "generated_at": "2026-06-29T15:42:30+00:00",
+    "source_csv_path": "examples\\owner_pricing\\fake_owner_pricing.csv",
+    "baseline_pricing_path": "examples\\owner_pricing\\fake_current_pricing.csv",
+    "summary": {
+      "total_rows_read": 7,
+      "valid_rows_applied": 3,
+      "invalid_rows_skipped": 4,
+      "duplicate_keys": 1,
+      "added_materials": 1,
+      "updated_materials": 1,
+      "unchanged_materials": 1,
+      "retained_baseline_materials": 1,
+      "skipped_rows": 4,
+      "sandbox_materials_written": 4
+    }
+  },
+  "sandbox_apply_plan": {
+    "path": "examples\\owner_pricing\\fake_sandbox_apply_plan.md",
+    "bytes_read": 2881
+  },
+  "dry_run_report": {
+    "path": "examples\\owner_pricing\\fake_preview_report.md",
+    "bytes_read": 1955
+  },
+  "final_import_enabled": false,
+  "live_json_mutated": false,
+  "production_pricing_mutated": false,
+  "warnings": [
+    "This approval record is file-based and traceable, but it is not a production import.",
+    "Final import remains disabled until a separate G0-approved task exists.",
+    "Keep real owner pricing CSV and local approval records outside Git-tracked paths."
+  ],
+  "checklist": [
+    "Owner reviewed the sandbox output JSON.",
+    "Owner confirmed the sandbox output checksum is attached to this record.",
+    "Owner reviewed the dry-run report, when provided.",
+    "Owner reviewed the sandbox apply plan, when provided.",
+    "Owner confirmed this approval does not enable production import.",
+    "Owner confirmed no live JSON or production pricing data was mutated.",
+    "G2 should review this approval record before any future final import task."
+  ]
+}

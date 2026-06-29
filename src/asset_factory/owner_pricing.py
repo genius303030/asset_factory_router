@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ REQUIRED_OWNER_PRICING_FIELDS = (
     "unit",
     "unit_price",
 )
+
+OWNER_PRICING_APPROVAL_PHRASE = "I_APPROVE_SANDBOX_PRICING_OUTPUT"
 
 
 @dataclass
@@ -96,6 +99,16 @@ class OwnerPricingSandboxOutputResult:
     updated_materials: int
     unchanged_materials: int
     duplicate_material_keys: int
+
+
+@dataclass
+class OwnerPricingApprovalRecordResult:
+    sandbox_output_path: str
+    approval_record_path: str
+    markdown_summary_path: Optional[str]
+    sandbox_output_sha256: str
+    generated_at: str
+    approved_by: str
 
 
 LIVE_OUTPUT_PATH_PARTS = {
@@ -339,6 +352,72 @@ def write_sandbox_apply_output(
         updated_materials=summary["updated_materials"],
         unchanged_materials=summary["unchanged_materials"],
         duplicate_material_keys=len(result.duplicate_material_keys),
+    )
+
+
+def write_owner_pricing_approval_record(
+    sandbox_output_path: str,
+    approval_record_path: str,
+    owner_approval: str,
+    sandbox_apply_plan_path: Optional[str] = None,
+    dry_run_report_path: Optional[str] = None,
+    markdown_summary_path: Optional[str] = None,
+    approved_by: str = "local owner / manual owner",
+    overwrite: bool = False,
+) -> OwnerPricingApprovalRecordResult:
+    sandbox_output, sandbox_output_sha256 = _load_validated_sandbox_output(
+        sandbox_output_path
+    )
+    _validate_owner_approval_phrase(owner_approval)
+    _validate_sandbox_output_path(
+        approval_record_path,
+        overwrite=overwrite,
+        output_kind="owner pricing approval record",
+    )
+    if markdown_summary_path:
+        _validate_sandbox_output_path(
+            markdown_summary_path,
+            overwrite=overwrite,
+            output_kind="owner pricing approval markdown summary",
+        )
+
+    _validate_distinct_output_paths(
+        [
+            ("owner pricing approval record", approval_record_path),
+            ("owner pricing approval markdown summary", markdown_summary_path),
+        ]
+    )
+
+    sandbox_apply_plan_info = _read_optional_sandbox_apply_plan(sandbox_apply_plan_path)
+    dry_run_report_info = _read_optional_dry_run_report(dry_run_report_path)
+    generated_at = _generated_timestamp()
+    approval_record = build_owner_pricing_approval_record_json(
+        sandbox_output=sandbox_output,
+        sandbox_output_path=sandbox_output_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        owner_approval=owner_approval,
+        approved_by=approved_by,
+        sandbox_apply_plan_info=sandbox_apply_plan_info,
+        dry_run_report_info=dry_run_report_info,
+        generated_at=generated_at,
+    )
+
+    _write_json_file(approval_record_path, approval_record)
+
+    if markdown_summary_path:
+        markdown = build_owner_pricing_approval_record_markdown(
+            approval_record,
+            markdown_summary_path=markdown_summary_path,
+        )
+        _write_text_file(markdown_summary_path, markdown)
+
+    return OwnerPricingApprovalRecordResult(
+        sandbox_output_path=sandbox_output_path,
+        approval_record_path=approval_record_path,
+        markdown_summary_path=markdown_summary_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        generated_at=generated_at,
+        approved_by=approved_by,
     )
 
 
@@ -643,6 +722,104 @@ def build_sandbox_apply_output_summary_json(
         "skipped_rows": sandbox_output["skipped_rows"],
         "sandbox_boundaries": sandbox_output["sandbox_boundaries"],
     }
+
+
+def build_owner_pricing_approval_record_json(
+    sandbox_output: Dict[str, Any],
+    sandbox_output_path: str,
+    sandbox_output_sha256: str,
+    owner_approval: str,
+    approved_by: str,
+    sandbox_apply_plan_info: Optional[Dict[str, Any]] = None,
+    dry_run_report_info: Optional[Dict[str, Any]] = None,
+    generated_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    generated_at = generated_at or _generated_timestamp()
+
+    return {
+        "approval_type": "owner_pricing_sandbox_output_approval",
+        "sandbox_only": True,
+        "approval_notice": (
+            "Manual owner approval record only. This does not enable final import "
+            "and does not mutate live or production pricing data."
+        ),
+        "generated_at": generated_at,
+        "approved_by": approved_by or "local owner / manual owner",
+        "approval_phrase_used": owner_approval,
+        "expected_approval_phrase": OWNER_PRICING_APPROVAL_PHRASE,
+        "sandbox_output": {
+            "path": sandbox_output_path,
+            "sha256": sandbox_output_sha256,
+            "output_type": sandbox_output.get("output_type"),
+            "generated_at": sandbox_output.get("generated_at"),
+            "source_csv_path": sandbox_output.get("source_csv_path"),
+            "baseline_pricing_path": sandbox_output.get("baseline_pricing_path"),
+            "summary": sandbox_output.get("summary", {}),
+        },
+        "sandbox_apply_plan": sandbox_apply_plan_info,
+        "dry_run_report": dry_run_report_info,
+        "final_import_enabled": False,
+        "live_json_mutated": False,
+        "production_pricing_mutated": False,
+        "warnings": [
+            "This approval record is file-based and traceable, but it is not a production import.",
+            "Final import remains disabled until a separate G0-approved task exists.",
+            "Keep real owner pricing CSV and local approval records outside Git-tracked paths.",
+        ],
+        "checklist": _approval_checklist(),
+    }
+
+
+def build_owner_pricing_approval_record_markdown(
+    approval_record: Dict[str, Any],
+    markdown_summary_path: str,
+) -> str:
+    sandbox_output = approval_record["sandbox_output"]
+    summary = sandbox_output.get("summary", {})
+
+    lines = [
+        "# Owner Pricing Approval Record Summary",
+        "",
+        "Manual owner approval record only. This does not enable final import or mutate production pricing data.",
+        "",
+        "## Approval Metadata",
+        "",
+        f"- Generated at: `{approval_record['generated_at']}`",
+        f"- Approved by: `{approval_record['approved_by']}`",
+        f"- Approval phrase used: `{approval_record['approval_phrase_used']}`",
+        f"- Sandbox output path: `{sandbox_output['path']}`",
+        f"- Sandbox output SHA-256: `{sandbox_output['sha256']}`",
+        f"- Sandbox apply plan: `{_sandbox_apply_plan_label(approval_record['sandbox_apply_plan'])}`",
+        f"- Dry-run report: `{_dry_run_report_label(approval_record['dry_run_report'])}`",
+        f"- Markdown summary path: `{markdown_summary_path}`",
+        "",
+        "## Sandbox Output Summary",
+        "",
+        "| Metric | Count |",
+        "| --- | ---: |",
+        f"| Added materials | {summary.get('added_materials', 0)} |",
+        f"| Updated materials | {summary.get('updated_materials', 0)} |",
+        f"| Unchanged materials | {summary.get('unchanged_materials', 0)} |",
+        f"| Invalid rows skipped | {summary.get('invalid_rows_skipped', 0)} |",
+        f"| Duplicate keys | {summary.get('duplicate_keys', 0)} |",
+        f"| Sandbox materials written | {summary.get('sandbox_materials_written', 0)} |",
+        "",
+        "## Warnings",
+        "",
+        *_bullet_lines(approval_record["warnings"]),
+        "",
+        "## Checklist",
+        "",
+        *_checklist_lines(approval_record["checklist"]),
+        "",
+        "## Safety Boundaries",
+        "",
+        "- final_import_enabled: false",
+        "- live_json_mutated: false",
+        "- production_pricing_mutated: false",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _read_csv_rows(csv_path: str) -> List[Tuple[int, Dict[str, str]]]:
@@ -1042,6 +1219,46 @@ def _validate_distinct_output_paths(paths: List[Tuple[str, Optional[str]]]) -> N
         seen_paths[normalized_path] = output_kind
 
 
+def _load_validated_sandbox_output(sandbox_output_path: str) -> Tuple[Dict[str, Any], str]:
+    if not sandbox_output_path or not sandbox_output_path.strip():
+        raise ValueError("sandbox output path is required")
+
+    normalized_path = os.path.normpath(os.path.abspath(sandbox_output_path))
+    if not os.path.exists(normalized_path):
+        raise FileNotFoundError("sandbox output file does not exist")
+
+    if os.path.splitext(normalized_path)[1].lower() != ".json":
+        raise ValueError("sandbox output must be JSON")
+
+    with open(normalized_path, "rb") as file:
+        raw_content = file.read()
+
+    try:
+        sandbox_output = json.loads(raw_content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("sandbox output must be JSON") from exc
+
+    if not isinstance(sandbox_output, dict):
+        raise ValueError("sandbox output JSON must be an object")
+    if sandbox_output.get("sandbox_only") is not True:
+        raise ValueError("sandbox output must declare sandbox_only true")
+    if sandbox_output.get("final_import_enabled") is True:
+        raise ValueError("sandbox output must not enable final import")
+    if sandbox_output.get("live_json_mutated") is True:
+        raise ValueError("sandbox output must not declare live JSON mutation")
+    if sandbox_output.get("production_pricing_mutated") is True:
+        raise ValueError("sandbox output must not declare production pricing mutation")
+
+    return sandbox_output, hashlib.sha256(raw_content).hexdigest()
+
+
+def _validate_owner_approval_phrase(owner_approval: str) -> None:
+    if not owner_approval or not owner_approval.strip():
+        raise ValueError("owner approval phrase is required")
+    if owner_approval.strip() != OWNER_PRICING_APPROVAL_PHRASE:
+        raise ValueError("owner approval phrase is incorrect")
+
+
 def _read_optional_dry_run_report(path: Optional[str]) -> Optional[Dict[str, Any]]:
     if not path:
         return None
@@ -1173,6 +1390,18 @@ def _confirmation_checklist() -> List[str]:
         "G2 confirms add/update/unchanged candidates match the dry-run report.",
         "A future apply command, if approved, writes to sandbox output only.",
         "Rollback approach is documented before any production import is considered.",
+    ]
+
+
+def _approval_checklist() -> List[str]:
+    return [
+        "Owner reviewed the sandbox output JSON.",
+        "Owner confirmed the sandbox output checksum is attached to this record.",
+        "Owner reviewed the dry-run report, when provided.",
+        "Owner reviewed the sandbox apply plan, when provided.",
+        "Owner confirmed this approval does not enable production import.",
+        "Owner confirmed no live JSON or production pricing data was mutated.",
+        "G2 should review this approval record before any future final import task.",
     ]
 
 

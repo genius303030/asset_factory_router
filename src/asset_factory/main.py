@@ -213,6 +213,51 @@ def main():
         help="Allow overwriting existing sandbox output files",
     )
 
+    # Owner pricing approval gate command
+    owner_pricing_approval_parser = subparsers.add_parser(
+        "owner-pricing-approve-sandbox-output",
+        aliases=["owner-pricing-approval-gate"],
+        parents=[parent_parser],
+        help="Write a manual owner approval record for a sandbox pricing output",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--sandbox-output",
+        required=True,
+        help="Path to the sandbox pricing output JSON from owner-pricing-apply-sandbox-output",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--sandbox-apply-plan",
+        help="Optional sandbox apply plan to reference",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--dry-run-report",
+        help="Optional dry-run report to reference",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--owner-approval",
+        required=True,
+        help="Required exact approval phrase: I_APPROVE_SANDBOX_PRICING_OUTPUT",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--approved-by",
+        default="local owner / manual owner",
+        help="Manual approver label to include in the approval record",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--approval-record",
+        required=True,
+        help="Explicit path to write the approval record JSON",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--markdown-summary",
+        help="Optional path to write a markdown approval summary",
+    )
+    owner_pricing_approval_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting an existing approval record output",
+    )
+
     args = parser.parse_args()
     
     setup_logging(args.debug)
@@ -313,6 +358,37 @@ def main():
             print(f"Unchanged materials: {result.unchanged_materials}")
             print(f"Duplicate keys: {result.duplicate_material_keys}")
             print(f"Sandbox materials written: {result.sandbox_materials_written}")
+        elif args.command in (
+            "owner-pricing-approve-sandbox-output",
+            "owner-pricing-approval-gate",
+        ):
+            import sys
+            from .owner_pricing import write_owner_pricing_approval_record
+            try:
+                result = write_owner_pricing_approval_record(
+                    sandbox_output_path=args.sandbox_output,
+                    sandbox_apply_plan_path=args.sandbox_apply_plan,
+                    dry_run_report_path=args.dry_run_report,
+                    owner_approval=args.owner_approval,
+                    approved_by=args.approved_by,
+                    approval_record_path=args.approval_record,
+                    markdown_summary_path=args.markdown_summary,
+                    overwrite=args.overwrite,
+                )
+            except Exception as e:
+                print(f"Error: {str(e)}", file=sys.stderr)
+                raise SystemExit(1)
+
+            print("\n--- Owner Pricing Approval Gate ---")
+            print(f"Approval record: {args.approval_record}")
+            if args.markdown_summary:
+                print(f"Markdown summary: {args.markdown_summary}")
+            print(f"Sandbox output: {args.sandbox_output}")
+            print(f"Sandbox output SHA-256: {result.sandbox_output_sha256}")
+            print(f"Approved by: {result.approved_by}")
+            print("Final import enabled: false")
+            print("Live JSON mutated: false")
+            print("Production pricing mutated: false")
         else:
             parser.print_help()
     except Exception as e:

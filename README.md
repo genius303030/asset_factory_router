@@ -17,6 +17,7 @@ pip install -e .
 - `asset-factory owner-pricing-dry-run --csv <path> --report <path> [--current-pricing <path>]`
 - `asset-factory owner-pricing-plan-sandbox-apply --csv <path> --plan <path> [--current-pricing <path>]`
 - `asset-factory owner-pricing-apply-sandbox-output --csv <path> --output <path> [--current-pricing <path>]`
+- `asset-factory owner-pricing-approve-sandbox-output --sandbox-output <path> --owner-approval <phrase> --approval-record <path>`
 
 ## Testing
 ```bash

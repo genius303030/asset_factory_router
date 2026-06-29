@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -6,7 +7,9 @@ import tempfile
 import unittest
 
 from asset_factory.owner_pricing import (
+    OWNER_PRICING_APPROVAL_PHRASE,
     dry_run_owner_pricing_import,
+    write_owner_pricing_approval_record,
     write_sandbox_apply_output,
     write_sandbox_apply_plan,
     write_preview_report,
@@ -572,6 +575,394 @@ class TestOwnerPricingDryRun(unittest.TestCase):
         self.assertEqual(sandbox_output["summary"]["sandbox_materials_written"], 4)
         self.assertEqual(sandbox_output["summary"]["skipped_rows"], 4)
         self.assertIn("sample_concrete", json.dumps(sandbox_output))
+
+    def test_approval_gate_writes_record_for_fake_sandbox_output(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        plan_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_apply_plan.md",
+        )
+        dry_run_report_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_preview_report.md",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+        markdown_summary_path = os.path.join(self.test_dir.name, "approval_record.md")
+
+        result = write_owner_pricing_approval_record(
+            sandbox_output_path=sandbox_output_path,
+            sandbox_apply_plan_path=plan_path,
+            dry_run_report_path=dry_run_report_path,
+            owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+            approval_record_path=approval_record_path,
+            markdown_summary_path=markdown_summary_path,
+        )
+
+        self.assertTrue(os.path.exists(approval_record_path))
+        self.assertTrue(os.path.exists(markdown_summary_path))
+        self.assertEqual(result.approved_by, "local owner / manual owner")
+
+        with open(sandbox_output_path, "rb") as file:
+            expected_sha256 = hashlib.sha256(file.read()).hexdigest()
+        self.assertEqual(result.sandbox_output_sha256, expected_sha256)
+
+        with open(approval_record_path, "r", encoding="utf-8") as file:
+            approval_record = json.load(file)
+
+        self.assertEqual(
+            approval_record["approval_type"],
+            "owner_pricing_sandbox_output_approval",
+        )
+        self.assertTrue(approval_record["sandbox_only"])
+        self.assertEqual(
+            approval_record["approval_phrase_used"],
+            OWNER_PRICING_APPROVAL_PHRASE,
+        )
+        self.assertEqual(
+            approval_record["sandbox_output"]["sha256"],
+            expected_sha256,
+        )
+        self.assertEqual(
+            approval_record["sandbox_apply_plan"]["path"],
+            plan_path,
+        )
+        self.assertEqual(
+            approval_record["dry_run_report"]["path"],
+            dry_run_report_path,
+        )
+        self.assertFalse(approval_record["final_import_enabled"])
+        self.assertFalse(approval_record["live_json_mutated"])
+        self.assertFalse(approval_record["production_pricing_mutated"])
+        self.assertGreaterEqual(len(approval_record["checklist"]), 5)
+
+        with open(markdown_summary_path, "r", encoding="utf-8") as file:
+            markdown = file.read()
+        self.assertIn("# Owner Pricing Approval Record Summary", markdown)
+        self.assertIn("Final import remains disabled", json.dumps(approval_record))
+
+    def test_approval_gate_requires_approval_phrase(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+
+        with self.assertRaisesRegex(ValueError, "approval phrase is required"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=sandbox_output_path,
+                owner_approval="",
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_requires_sandbox_output_path(self):
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+
+        with self.assertRaisesRegex(ValueError, "sandbox output path is required"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path="",
+                owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_requires_approval_output_path(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+
+        with self.assertRaisesRegex(ValueError, "approval record path is required"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=sandbox_output_path,
+                owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                approval_record_path="",
+            )
+
+    def test_approval_gate_rejects_wrong_approval_phrase(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+
+        with self.assertRaisesRegex(ValueError, "approval phrase is incorrect"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=sandbox_output_path,
+                owner_approval="I_APPROVE_PRODUCTION_IMPORT",
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_requires_existing_sandbox_output(self):
+        missing_sandbox_output = os.path.join(self.test_dir.name, "missing_sandbox.json")
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+
+        with self.assertRaisesRegex(FileNotFoundError, "does not exist"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=missing_sandbox_output,
+                owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_rejects_non_json_sandbox_output(self):
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.txt")
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            file.write("not json")
+
+        with self.assertRaisesRegex(ValueError, "must be JSON"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=sandbox_output_path,
+                owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_rejects_sandbox_only_false(self):
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.json")
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            json.dump({"sandbox_only": False, "final_import_enabled": False}, file)
+
+        with self.assertRaisesRegex(ValueError, "sandbox_only true"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=sandbox_output_path,
+                owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_rejects_final_import_enabled_sandbox_output(self):
+        sandbox_output_path = os.path.join(self.test_dir.name, "sandbox_output.json")
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+        with open(sandbox_output_path, "w", encoding="utf-8") as file:
+            json.dump({"sandbox_only": True, "final_import_enabled": True}, file)
+
+        with self.assertRaisesRegex(ValueError, "final import"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=sandbox_output_path,
+                owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_blocks_live_prod_config_data_src_output_paths(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+
+        for path_part in ["live", "prod", "production", "config", "data", "src"]:
+            with self.subTest(path_part=path_part):
+                approval_record_path = os.path.join(
+                    self.test_dir.name,
+                    path_part,
+                    "approval_record.json",
+                )
+                with self.assertRaisesRegex(ValueError, "live or production"):
+                    write_owner_pricing_approval_record(
+                        sandbox_output_path=sandbox_output_path,
+                        owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                        approval_record_path=approval_record_path,
+                    )
+
+    def test_approval_gate_refuses_overwrite_without_flag(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+
+        write_owner_pricing_approval_record(
+            sandbox_output_path=sandbox_output_path,
+            owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+            approval_record_path=approval_record_path,
+        )
+
+        with self.assertRaisesRegex(FileExistsError, "--overwrite"):
+            write_owner_pricing_approval_record(
+                sandbox_output_path=sandbox_output_path,
+                owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+                approval_record_path=approval_record_path,
+            )
+
+    def test_approval_gate_overwrite_flag_is_explicit(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+
+        write_owner_pricing_approval_record(
+            sandbox_output_path=sandbox_output_path,
+            owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+            approval_record_path=approval_record_path,
+        )
+        write_owner_pricing_approval_record(
+            sandbox_output_path=sandbox_output_path,
+            owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+            approval_record_path=approval_record_path,
+            overwrite=True,
+        )
+
+        self.assertTrue(os.path.exists(approval_record_path))
+
+    def test_approval_gate_does_not_mutate_sandbox_output(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "approval_record.json")
+
+        with open(sandbox_output_path, "rb") as file:
+            before = file.read()
+
+        write_owner_pricing_approval_record(
+            sandbox_output_path=sandbox_output_path,
+            owner_approval=OWNER_PRICING_APPROVAL_PHRASE,
+            approval_record_path=approval_record_path,
+        )
+
+        with open(sandbox_output_path, "rb") as file:
+            after = file.read()
+
+        self.assertEqual(after, before)
+
+    def test_cli_approval_gate_writes_record(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "cli_approval_record.json")
+        markdown_summary_path = os.path.join(self.test_dir.name, "cli_approval_record.md")
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "owner-pricing-approve-sandbox-output",
+                "--sandbox-output",
+                sandbox_output_path,
+                "--owner-approval",
+                OWNER_PRICING_APPROVAL_PHRASE,
+                "--approval-record",
+                approval_record_path,
+                "--markdown-summary",
+                markdown_summary_path,
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertTrue(os.path.exists(approval_record_path))
+        self.assertTrue(os.path.exists(markdown_summary_path))
+        self.assertIn("Owner Pricing Approval Gate", result.stdout)
+        self.assertIn("Final import enabled: false", result.stdout)
+
+    def test_cli_approval_gate_rejects_wrong_phrase(self):
+        sandbox_output_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_sandbox_pricing_output.json",
+        )
+        approval_record_path = os.path.join(self.test_dir.name, "cli_approval_record.json")
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "owner-pricing-approve-sandbox-output",
+                "--sandbox-output",
+                sandbox_output_path,
+                "--owner-approval",
+                "WRONG",
+                "--approval-record",
+                approval_record_path,
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("approval phrase is incorrect", result.stderr)
+        self.assertFalse(os.path.exists(approval_record_path))
+
+    def test_cli_does_not_add_final_import_command(self):
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "--help",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn("final-import", result.stdout)
+        self.assertNotIn("production-import", result.stdout)
+
+    def test_fake_example_approval_record_is_committed_output_shape(self):
+        example_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_owner_pricing_approval_record.json",
+        )
+
+        with open(example_path, "r", encoding="utf-8") as file:
+            approval_record = json.load(file)
+
+        self.assertEqual(
+            approval_record["approval_type"],
+            "owner_pricing_sandbox_output_approval",
+        )
+        self.assertEqual(
+            approval_record["approval_phrase_used"],
+            OWNER_PRICING_APPROVAL_PHRASE,
+        )
+        self.assertRegex(approval_record["sandbox_output"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertFalse(approval_record["final_import_enabled"])
+        self.assertFalse(approval_record["live_json_mutated"])
+        self.assertFalse(approval_record["production_pricing_mutated"])
 
 
 if __name__ == "__main__":
