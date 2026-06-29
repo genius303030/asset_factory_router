@@ -8,6 +8,7 @@ import unittest
 
 from asset_factory.owner_pricing import (
     OWNER_PRICING_APPROVAL_PHRASE,
+    _paths_match,
     dry_run_owner_pricing_import,
     run_owner_pricing_final_import_fake_rehearsal,
     write_owner_pricing_final_import_preflight,
@@ -984,6 +985,12 @@ class TestOwnerPricingDryRun(unittest.TestCase):
             "owner_pricing",
             "fake_owner_pricing_approval_record.json",
         )
+
+    def test_path_reference_matching_accepts_windows_style_fixture_paths(self):
+        actual_path = self._fake_sandbox_output_path()
+        fixture_reference = "examples\\owner_pricing\\fake_sandbox_pricing_output.json"
+
+        self.assertTrue(_paths_match(fixture_reference, actual_path))
 
     def _write_temp_production_target(self):
         production_target_path = os.path.join(self.test_dir.name, "production_target.csv")
