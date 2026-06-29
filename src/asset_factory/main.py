@@ -300,6 +300,68 @@ def main():
         help="Allow overwriting existing preflight report outputs",
     )
 
+    # Owner pricing final import fake rehearsal command
+    owner_pricing_fake_rehearsal_parser = subparsers.add_parser(
+        "owner-pricing-final-import-fake-rehearsal",
+        parents=[parent_parser],
+        help="Run a fake-fixture-only rehearsal of final-import-adjacent mechanics",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--sandbox-output",
+        required=True,
+        help="Path to the fake sandbox pricing output JSON",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--approval-record",
+        required=True,
+        help="Path to the fake owner approval record JSON",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--preflight-report",
+        required=True,
+        help="Path to the fake preflight report JSON",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--fake-production-target",
+        required=True,
+        help="Explicit fake production target fixture to read",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--fake-production-output",
+        required=True,
+        help="Explicit fake output path to write and restore",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--backup-output",
+        required=True,
+        help="Explicit fake backup output path",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--audit-log",
+        required=True,
+        help="Explicit fake rehearsal audit log path",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--report",
+        required=True,
+        help="Explicit fake rehearsal markdown report path",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting fake report, audit, and output paths; never backup",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--simulate-post-write-validation-failure",
+        action="store_true",
+        help="Exercise rollback-required handling with fake duplicate output",
+    )
+    owner_pricing_fake_rehearsal_parser.add_argument(
+        "--simulate-rollback-verification-failure",
+        action="store_true",
+        help="Exercise rollback-failed handling by corrupting fake restore output",
+    )
+
     args = parser.parse_args()
     
     setup_logging(args.debug)
@@ -461,6 +523,39 @@ def main():
             print(f"Production target SHA-256: {result.production_target_sha256}")
             print("No final import command invoked.")
             print("No production write performed.")
+        elif args.command == "owner-pricing-final-import-fake-rehearsal":
+            import sys
+            from .owner_pricing import run_owner_pricing_final_import_fake_rehearsal
+            try:
+                result = run_owner_pricing_final_import_fake_rehearsal(
+                    sandbox_output_path=args.sandbox_output,
+                    approval_record_path=args.approval_record,
+                    preflight_report_path=args.preflight_report,
+                    fake_production_target_path=args.fake_production_target,
+                    fake_production_output_path=args.fake_production_output,
+                    backup_output_path=args.backup_output,
+                    audit_log_path=args.audit_log,
+                    report_path=args.report,
+                    overwrite=args.overwrite,
+                    simulate_post_write_validation_failure=args.simulate_post_write_validation_failure,
+                    simulate_rollback_verification_failure=args.simulate_rollback_verification_failure,
+                )
+            except Exception as e:
+                print(f"Error: {str(e)}", file=sys.stderr)
+                raise SystemExit(1)
+
+            print("\n--- Owner Pricing Final Import Fake Rehearsal ---")
+            print(f"Status: {result.status}")
+            print(f"Report: {result.report_path}")
+            print(f"Audit log: {result.audit_log_path}")
+            print(f"Fake production output: {result.fake_production_output_path}")
+            print(f"Fake backup output: {result.backup_output_path}")
+            print(f"Sandbox output SHA-256: {result.sandbox_output_sha256}")
+            print(f"Approval record SHA-256: {result.approval_record_sha256}")
+            print(f"Preflight report SHA-256: {result.preflight_report_sha256}")
+            print("Fake-fixture-only rehearsal.")
+            print("No real production import command invoked.")
+            print("No real production write performed.")
         else:
             parser.print_help()
     except Exception as e:

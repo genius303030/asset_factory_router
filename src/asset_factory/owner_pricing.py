@@ -2,6 +2,7 @@ import csv
 import hashlib
 import json
 import os
+import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -123,6 +124,24 @@ class OwnerPricingPreflightResult:
     warnings: List[str]
 
 
+@dataclass
+class OwnerPricingFakeRehearsalResult:
+    status: str
+    report_path: str
+    audit_log_path: str
+    fake_production_output_path: str
+    backup_output_path: str
+    sandbox_output_sha256: Optional[str]
+    approval_record_sha256: Optional[str]
+    preflight_report_sha256: Optional[str]
+    pre_import_production_sha256: Optional[str]
+    backup_sha256: Optional[str]
+    post_write_production_sha256: Optional[str]
+    restored_production_sha256: Optional[str]
+    blockers: List[str]
+    warnings: List[str]
+
+
 LIVE_OUTPUT_PATH_PARTS = {
     "config",
     "data",
@@ -141,6 +160,13 @@ LIVE_OUTPUT_FILENAMES = {
     "owner_pricing.json",
     "pricing.csv",
     "pricing.json",
+}
+
+FAKE_REHEARSAL_SAFE_PATH_PARTS = {
+    "examples",
+    "output",
+    "outputs",
+    "owner_pricing_private",
 }
 
 
@@ -529,6 +555,267 @@ def write_owner_pricing_final_import_preflight(
         raise ValueError("owner pricing final import preflight failed")
 
     return result
+
+
+def run_owner_pricing_final_import_fake_rehearsal(
+    sandbox_output_path: str,
+    approval_record_path: str,
+    preflight_report_path: str,
+    fake_production_target_path: str,
+    fake_production_output_path: str,
+    backup_output_path: str,
+    audit_log_path: str,
+    report_path: str,
+    overwrite: bool = False,
+    simulate_post_write_validation_failure: bool = False,
+    simulate_rollback_verification_failure: bool = False,
+) -> OwnerPricingFakeRehearsalResult:
+    _validate_fake_rehearsal_input_path(
+        sandbox_output_path,
+        path_kind="sandbox output",
+        allowed_extensions={".json"},
+    )
+    _validate_fake_rehearsal_input_path(
+        approval_record_path,
+        path_kind="approval record",
+        allowed_extensions={".json"},
+    )
+    _validate_fake_rehearsal_input_path(
+        preflight_report_path,
+        path_kind="preflight report",
+        allowed_extensions={".json"},
+    )
+    _validate_fake_rehearsal_input_path(
+        fake_production_target_path,
+        path_kind="fake production target",
+        allowed_extensions={".csv", ".json"},
+    )
+    _validate_fake_rehearsal_write_path(
+        fake_production_output_path,
+        path_kind="fake production output",
+        allowed_extensions={".csv", ".json"},
+        overwrite=overwrite,
+    )
+    _validate_fake_rehearsal_write_path(
+        backup_output_path,
+        path_kind="fake backup output",
+        allowed_extensions={".csv", ".json"},
+        overwrite=False,
+    )
+    _validate_fake_rehearsal_write_path(
+        audit_log_path,
+        path_kind="fake rehearsal audit log",
+        allowed_extensions={".json"},
+        overwrite=overwrite,
+    )
+    _validate_fake_rehearsal_write_path(
+        report_path,
+        path_kind="fake rehearsal report",
+        allowed_extensions={".md"},
+        overwrite=overwrite,
+    )
+    _validate_distinct_output_paths(
+        [
+            ("sandbox output", sandbox_output_path),
+            ("approval record", approval_record_path),
+            ("preflight report", preflight_report_path),
+            ("fake production target", fake_production_target_path),
+            ("fake production output", fake_production_output_path),
+            ("fake backup output", backup_output_path),
+            ("fake rehearsal audit log", audit_log_path),
+            ("fake rehearsal report", report_path),
+        ]
+    )
+
+    sandbox_output, sandbox_output_sha256 = _load_validated_sandbox_output(
+        sandbox_output_path
+    )
+    approval_record, approval_record_sha256 = _load_json_file_with_sha256(
+        approval_record_path,
+        input_kind="approval record",
+    )
+    preflight_report, preflight_report_sha256 = _load_json_file_with_sha256(
+        preflight_report_path,
+        input_kind="preflight report",
+    )
+    pre_import_production_sha256 = _file_sha256(fake_production_target_path)
+    pre_import_records = _load_current_pricing(fake_production_target_path)
+
+    audit = build_owner_pricing_fake_rehearsal_audit(
+        generated_at=_generated_timestamp(),
+        sandbox_output_path=sandbox_output_path,
+        approval_record_path=approval_record_path,
+        preflight_report_path=preflight_report_path,
+        fake_production_target_path=fake_production_target_path,
+        fake_production_output_path=fake_production_output_path,
+        backup_output_path=backup_output_path,
+        audit_log_path=audit_log_path,
+        report_path=report_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        approval_record_sha256=approval_record_sha256,
+        preflight_report_sha256=preflight_report_sha256,
+        pre_import_production_sha256=pre_import_production_sha256,
+    )
+    _append_fake_rehearsal_state(audit, "started", "fake rehearsal started")
+    _write_json_file(audit_log_path, audit)
+
+    validation_results, blockers, warnings = _build_fake_rehearsal_packet_validations(
+        sandbox_output=sandbox_output,
+        sandbox_output_path=sandbox_output_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        approval_record=approval_record,
+        approval_record_path=approval_record_path,
+        approval_record_sha256=approval_record_sha256,
+        preflight_report=preflight_report,
+        preflight_report_path=preflight_report_path,
+        fake_production_target_path=fake_production_target_path,
+        pre_import_production_sha256=pre_import_production_sha256,
+        backup_output_path=backup_output_path,
+    )
+    audit["validation_results"] = validation_results
+    audit["warnings"] = warnings
+    if blockers:
+        _finalize_fake_rehearsal(
+            audit=audit,
+            audit_log_path=audit_log_path,
+            report_path=report_path,
+            status="aborted",
+            blockers=blockers,
+            detail="input packet failed fake rehearsal validation",
+        )
+        raise ValueError("owner pricing final import fake rehearsal failed")
+
+    try:
+        backup_dir = os.path.dirname(os.path.abspath(backup_output_path))
+        os.makedirs(backup_dir, exist_ok=True)
+        shutil.copyfile(fake_production_target_path, backup_output_path)
+    except OSError as exc:
+        blockers = [f"fake backup write failed: {exc}"]
+        _finalize_fake_rehearsal(
+            audit=audit,
+            audit_log_path=audit_log_path,
+            report_path=report_path,
+            status="failed_before_write",
+            blockers=blockers,
+            detail="fake backup could not be written",
+        )
+        raise ValueError("owner pricing final import fake rehearsal failed") from exc
+
+    backup_sha256 = _file_sha256(backup_output_path)
+    audit["checksums"]["backup_sha256"] = backup_sha256
+    audit["safety_flags"]["backup_written"] = True
+    audit["safety_flags"]["backup_written_to_fake_path"] = True
+    if backup_sha256 != pre_import_production_sha256:
+        blockers = ["fake backup checksum does not match pre-import fake production checksum"]
+        _finalize_fake_rehearsal(
+            audit=audit,
+            audit_log_path=audit_log_path,
+            report_path=report_path,
+            status="failed_before_write",
+            blockers=blockers,
+            detail="fake backup checksum verification failed",
+        )
+        raise ValueError("owner pricing final import fake rehearsal failed")
+
+    _append_fake_rehearsal_state(
+        audit,
+        "backup_verified",
+        "fake backup checksum matched pre-import fake production checksum",
+    )
+    _write_json_file(audit_log_path, audit)
+
+    fake_materials = _sandbox_materials_for_fake_rehearsal(sandbox_output)
+    if simulate_post_write_validation_failure and fake_materials:
+        fake_materials = [*fake_materials, dict(fake_materials[0])]
+    _write_fake_pricing_output(fake_production_output_path, fake_materials)
+    audit["safety_flags"]["fake_production_write_performed"] = True
+    audit["safety_flags"]["production_write_performed"] = False
+    post_write_sha256 = _file_sha256(fake_production_output_path)
+    audit["checksums"]["post_write_fake_production_sha256"] = post_write_sha256
+    _append_fake_rehearsal_state(
+        audit,
+        "fake_write_completed",
+        "fake production output path was written",
+    )
+
+    post_results, post_blockers = _validate_fake_rehearsal_written_output(
+        output_path=fake_production_output_path,
+        expected_materials=fake_materials,
+        skipped_rows=sandbox_output.get("skipped_rows", []),
+        validation_label="post-write fake production output",
+    )
+    audit["post_write_validation_results"] = post_results
+    if post_blockers:
+        audit["post_write_blockers"] = post_blockers
+        _append_fake_rehearsal_state(
+            audit,
+            "rollback_required",
+            "post-write fake validation failed; rollback required",
+        )
+    else:
+        _append_fake_rehearsal_state(
+            audit,
+            "passed",
+            "fake write and post-write validation passed",
+        )
+    _write_json_file(audit_log_path, audit)
+
+    restored_sha256 = None
+    rollback_blockers: List[str] = []
+    try:
+        shutil.copyfile(backup_output_path, fake_production_output_path)
+        if simulate_rollback_verification_failure:
+            with open(fake_production_output_path, "a", encoding="utf-8") as file:
+                file.write("corrupted_fake_restore,Corrupted Fake Restore,kg,1.00\n")
+        restored_sha256 = _file_sha256(fake_production_output_path)
+        audit["checksums"]["restored_fake_production_sha256"] = restored_sha256
+        restore_results, restore_blockers = _validate_fake_rehearsal_restored_output(
+            output_path=fake_production_output_path,
+            expected_records=pre_import_records,
+        )
+        audit["restore_validation_results"] = restore_results
+        if restored_sha256 != backup_sha256:
+            restore_blockers.append("restored fake production checksum does not match fake backup checksum")
+        rollback_blockers.extend(restore_blockers)
+    except OSError as exc:
+        rollback_blockers.append(f"fake rollback restore failed: {exc}")
+
+    if rollback_blockers:
+        _finalize_fake_rehearsal(
+            audit=audit,
+            audit_log_path=audit_log_path,
+            report_path=report_path,
+            status="rollback_failed",
+            blockers=rollback_blockers,
+            detail="fake rollback verification failed",
+        )
+        raise ValueError("owner pricing final import fake rehearsal rollback failed")
+
+    _finalize_fake_rehearsal(
+        audit=audit,
+        audit_log_path=audit_log_path,
+        report_path=report_path,
+        status="rollback_passed",
+        blockers=[],
+        detail="fake rollback restored and verified the fake output path",
+    )
+
+    return OwnerPricingFakeRehearsalResult(
+        status=audit["status"],
+        report_path=report_path,
+        audit_log_path=audit_log_path,
+        fake_production_output_path=fake_production_output_path,
+        backup_output_path=backup_output_path,
+        sandbox_output_sha256=sandbox_output_sha256,
+        approval_record_sha256=approval_record_sha256,
+        preflight_report_sha256=preflight_report_sha256,
+        pre_import_production_sha256=pre_import_production_sha256,
+        backup_sha256=backup_sha256,
+        post_write_production_sha256=post_write_sha256,
+        restored_production_sha256=restored_sha256,
+        blockers=audit["blockers"],
+        warnings=audit["warnings"],
+    )
 
 
 def build_preview_report(result: OwnerPricingDryRunResult) -> str:
@@ -1039,6 +1326,174 @@ def build_owner_pricing_preflight_report(preflight: Dict[str, Any]) -> str:
             "- No live JSON was mutated.",
             "- No production pricing data was mutated.",
             "- Backup path was validated only; backup was not written.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_owner_pricing_fake_rehearsal_audit(
+    generated_at: str,
+    sandbox_output_path: str,
+    approval_record_path: str,
+    preflight_report_path: str,
+    fake_production_target_path: str,
+    fake_production_output_path: str,
+    backup_output_path: str,
+    audit_log_path: str,
+    report_path: str,
+    sandbox_output_sha256: str,
+    approval_record_sha256: str,
+    preflight_report_sha256: str,
+    pre_import_production_sha256: str,
+) -> Dict[str, Any]:
+    return {
+        "audit_type": "owner_pricing_final_import_fake_rehearsal",
+        "schema_version": 1,
+        "fake_fixture_only": True,
+        "status": "started",
+        "generated_at": generated_at,
+        "command": {
+            "name": "asset-factory owner-pricing-final-import-fake-rehearsal",
+            "reserved_production_command": "asset-factory owner-pricing-final-import",
+            "production_command_invoked": False,
+        },
+        "paths": {
+            "sandbox_output": sandbox_output_path,
+            "approval_record": approval_record_path,
+            "preflight_report": preflight_report_path,
+            "fake_production_target": fake_production_target_path,
+            "fake_production_output": fake_production_output_path,
+            "backup_output": backup_output_path,
+            "audit_log": audit_log_path,
+            "report": report_path,
+        },
+        "checksums": {
+            "sandbox_output_sha256": sandbox_output_sha256,
+            "approval_record_sha256": approval_record_sha256,
+            "preflight_report_sha256": preflight_report_sha256,
+            "pre_import_fake_production_sha256": pre_import_production_sha256,
+            "backup_sha256": None,
+            "post_write_fake_production_sha256": None,
+            "restored_fake_production_sha256": None,
+        },
+        "validation_results": [],
+        "post_write_validation_results": [],
+        "restore_validation_results": [],
+        "state_history": [],
+        "safety_flags": {
+            "production_write_performed": False,
+            "fake_production_write_performed": False,
+            "backup_written": False,
+            "backup_written_to_fake_path": False,
+            "live_json_mutated": False,
+            "production_pricing_mutated": False,
+        },
+        "rollback": {
+            "required": False,
+            "executed": False,
+            "restore_verified": False,
+        },
+        "blockers": [],
+        "warnings": [],
+        "next_safe_step": "Review fake rehearsal evidence; real final import remains blocked.",
+    }
+
+
+def build_owner_pricing_fake_rehearsal_report(audit: Dict[str, Any]) -> str:
+    lines = [
+        "# Owner Pricing Final Import Fake Rehearsal Report",
+        "",
+        "Fake-fixture-only rehearsal. No real production import command was invoked.",
+        "",
+        "## Status",
+        "",
+        f"- Result: `{audit['status']}`",
+        f"- Generated at: `{audit['generated_at']}`",
+        f"- Next safe step: {audit['next_safe_step']}",
+        "",
+        "## Safety Statement",
+        "",
+        "- No `asset-factory owner-pricing-final-import` command was added or invoked.",
+        "- No real production write was performed.",
+        "- No live JSON was mutated.",
+        "- No production pricing data was mutated.",
+        "- Backup writing is limited to the explicit fake backup path.",
+        "",
+        "## Paths",
+        "",
+        f"- Sandbox output: `{audit['paths']['sandbox_output']}`",
+        f"- Approval record: `{audit['paths']['approval_record']}`",
+        f"- Preflight report: `{audit['paths']['preflight_report']}`",
+        f"- Fake production target: `{audit['paths']['fake_production_target']}`",
+        f"- Fake production output: `{audit['paths']['fake_production_output']}`",
+        f"- Fake backup output: `{audit['paths']['backup_output']}`",
+        f"- Audit log: `{audit['paths']['audit_log']}`",
+        "",
+        "## Checksums",
+        "",
+        f"- Sandbox output SHA-256: `{audit['checksums']['sandbox_output_sha256']}`",
+        f"- Approval record SHA-256: `{audit['checksums']['approval_record_sha256']}`",
+        f"- Preflight report SHA-256: `{audit['checksums']['preflight_report_sha256']}`",
+        f"- Pre-import fake production SHA-256: `{audit['checksums']['pre_import_fake_production_sha256']}`",
+        f"- Fake backup SHA-256: `{audit['checksums']['backup_sha256']}`",
+        f"- Post-write fake production SHA-256: `{audit['checksums']['post_write_fake_production_sha256']}`",
+        f"- Restored fake production SHA-256: `{audit['checksums']['restored_fake_production_sha256']}`",
+        "",
+        "## State History",
+        "",
+        "| Status | Detail |",
+        "| --- | --- |",
+    ]
+    for item in audit["state_history"]:
+        lines.append(f"| {item['status']} | {item['detail']} |")
+
+    lines.extend(
+        [
+            "",
+            "## Input Validation",
+            "",
+            "| Check | Status | Detail |",
+            "| --- | --- | --- |",
+        ]
+    )
+    for item in audit["validation_results"]:
+        lines.append(f"| {item['check']} | {item['status']} | {item['detail']} |")
+
+    lines.extend(
+        [
+            "",
+            "## Post-write Validation",
+            "",
+            "| Check | Status | Detail |",
+            "| --- | --- | --- |",
+        ]
+    )
+    for item in audit["post_write_validation_results"]:
+        lines.append(f"| {item['check']} | {item['status']} | {item['detail']} |")
+
+    lines.extend(
+        [
+            "",
+            "## Restore Validation",
+            "",
+            "| Check | Status | Detail |",
+            "| --- | --- | --- |",
+        ]
+    )
+    for item in audit["restore_validation_results"]:
+        lines.append(f"| {item['check']} | {item['status']} | {item['detail']} |")
+
+    lines.extend(
+        [
+            "",
+            "## Blockers",
+            "",
+            *_bullet_lines(audit["blockers"]),
+            "",
+            "## Warnings",
+            "",
+            *_bullet_lines(audit["warnings"]),
             "",
         ]
     )
@@ -1741,6 +2196,528 @@ def _paths_match(left: Optional[str], right: str) -> bool:
     if not left or not right:
         return False
     return os.path.normcase(os.path.abspath(left)) == os.path.normcase(os.path.abspath(right))
+
+
+def _validate_fake_rehearsal_input_path(
+    path: str,
+    path_kind: str,
+    allowed_extensions: set,
+) -> None:
+    _validate_fake_rehearsal_path_shape(path, path_kind, allowed_extensions)
+    normalized_path = os.path.normpath(os.path.abspath(path))
+    if not os.path.exists(normalized_path):
+        raise FileNotFoundError(f"{path_kind} file does not exist")
+
+
+def _validate_fake_rehearsal_write_path(
+    path: str,
+    path_kind: str,
+    allowed_extensions: set,
+    overwrite: bool,
+) -> None:
+    _validate_fake_rehearsal_path_shape(path, path_kind, allowed_extensions)
+    normalized_path = os.path.normpath(os.path.abspath(path))
+    if os.path.exists(normalized_path) and not overwrite:
+        raise FileExistsError(f"refusing to overwrite existing {path_kind}")
+
+
+def _validate_fake_rehearsal_path_shape(
+    path: str,
+    path_kind: str,
+    allowed_extensions: set,
+) -> None:
+    if not path or not path.strip():
+        raise ValueError(f"{path_kind} path is required")
+    normalized_path = os.path.normpath(os.path.abspath(path))
+    path_parts = {part.lower() for part in normalized_path.split(os.sep)}
+    filename = os.path.basename(normalized_path).lower()
+    if path_parts.intersection(LIVE_OUTPUT_PATH_PARTS) or filename in LIVE_OUTPUT_FILENAMES:
+        raise ValueError(f"{path_kind} path appears unsafe")
+    if not _path_has_fake_rehearsal_marker(normalized_path):
+        raise ValueError(f"{path_kind} path must be a fake fixture or local output path")
+    extension = os.path.splitext(normalized_path)[1].lower()
+    if extension not in allowed_extensions:
+        expected = ", ".join(sorted(allowed_extensions))
+        raise ValueError(f"{path_kind} must use one of these extensions: {expected}")
+
+
+def _path_has_fake_rehearsal_marker(path: str) -> bool:
+    parts = [part.lower() for part in os.path.normpath(path).split(os.sep)]
+    filename = os.path.basename(path).lower()
+    if "fake" in filename:
+        return True
+    if any("fake" in part for part in parts):
+        return True
+    return bool(set(parts).intersection(FAKE_REHEARSAL_SAFE_PATH_PARTS))
+
+
+def _build_fake_rehearsal_packet_validations(
+    sandbox_output: Dict[str, Any],
+    sandbox_output_path: str,
+    sandbox_output_sha256: str,
+    approval_record: Dict[str, Any],
+    approval_record_path: str,
+    approval_record_sha256: str,
+    preflight_report: Dict[str, Any],
+    preflight_report_path: str,
+    fake_production_target_path: str,
+    pre_import_production_sha256: str,
+    backup_output_path: str,
+) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    validation_results: List[Dict[str, Any]] = []
+    blockers: List[str] = []
+    warnings: List[str] = []
+
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "sandbox output remains sandbox-only",
+        sandbox_output.get("sandbox_only") is True,
+        "sandbox_only is true",
+        "sandbox output must declare sandbox_only true",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "sandbox output final import remains disabled",
+        sandbox_output.get("final_import_enabled") is False,
+        "final_import_enabled is false",
+        "sandbox output must declare final_import_enabled false",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "sandbox output live JSON mutation flag remains false",
+        sandbox_output.get("live_json_mutated") is False,
+        "live_json_mutated is false",
+        "sandbox output must declare live_json_mutated false",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "sandbox output production mutation flag remains false",
+        sandbox_output.get("production_pricing_mutated") is False,
+        "production_pricing_mutated is false",
+        "sandbox output must declare production_pricing_mutated false",
+    )
+
+    approval_sandbox = approval_record.get("sandbox_output", {})
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "approval record type is owner sandbox approval",
+        approval_record.get("approval_type") == "owner_pricing_sandbox_output_approval",
+        "approval record type is expected",
+        "approval record type is not owner_pricing_sandbox_output_approval",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "approval checksum matches sandbox output",
+        approval_sandbox.get("sha256") == sandbox_output_sha256,
+        "approval checksum matches sandbox output bytes",
+        "approval checksum does not match sandbox output bytes",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "approval record references intended sandbox output",
+        _paths_match(approval_sandbox.get("path"), sandbox_output_path),
+        "approval record references intended sandbox output",
+        "approval record does not reference intended sandbox output",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "approval record final import flag remains false",
+        approval_record.get("final_import_enabled") is False,
+        "approval final_import_enabled is false",
+        "approval record must declare final_import_enabled false",
+    )
+
+    preflight_paths = preflight_report.get("checked_paths", {})
+    preflight_checksums = preflight_report.get("checksums", {})
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight report type is expected",
+        preflight_report.get("preflight_type") == "owner_pricing_final_import_preflight",
+        "preflight type is expected",
+        "preflight report type is not owner_pricing_final_import_preflight",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight status is PASS",
+        preflight_report.get("status") == "PASS",
+        "preflight status is PASS",
+        "preflight status is not PASS",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight references sandbox output",
+        _paths_match(preflight_paths.get("sandbox_output"), sandbox_output_path),
+        "preflight references intended sandbox output",
+        "preflight does not reference intended sandbox output",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight references approval record",
+        _paths_match(preflight_paths.get("approval_record"), approval_record_path),
+        "preflight references intended approval record",
+        "preflight does not reference intended approval record",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight references fake production target",
+        _paths_match(preflight_paths.get("production_target"), fake_production_target_path),
+        "preflight references intended fake production target",
+        "preflight does not reference intended fake production target",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight references fake backup output",
+        _paths_match(preflight_paths.get("backup_output"), backup_output_path),
+        "preflight references intended fake backup output",
+        "preflight does not reference intended fake backup output",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight sandbox checksum matches",
+        preflight_checksums.get("sandbox_output_sha256") == sandbox_output_sha256,
+        "preflight sandbox checksum matches",
+        "preflight sandbox checksum does not match sandbox output bytes",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight approval checksum matches",
+        preflight_checksums.get("approval_record_sha256") == approval_record_sha256,
+        "preflight approval checksum matches",
+        "preflight approval checksum does not match approval record bytes",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight production target checksum matches fake target",
+        preflight_checksums.get("production_target_sha256") == pre_import_production_sha256,
+        "preflight fake production checksum matches",
+        "preflight production target checksum does not match fake target bytes",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight reports no production write",
+        preflight_report.get("production_write_performed") is False,
+        "preflight production_write_performed is false",
+        "preflight must report production_write_performed false",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "preflight reports no backup written",
+        preflight_report.get("backup_written") is False,
+        "preflight backup_written is false",
+        "preflight must report backup_written false",
+    )
+
+    material_results, material_blockers = _validate_fake_rehearsal_material_packet(
+        sandbox_output
+    )
+    validation_results.extend(material_results)
+    blockers.extend(material_blockers)
+
+    if preflight_report_path and preflight_report.get("status") == "PASS":
+        warnings.extend(preflight_report.get("warnings", []))
+
+    return validation_results, blockers, warnings
+
+
+def _validate_fake_rehearsal_material_packet(
+    sandbox_output: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    validation_results: List[Dict[str, Any]] = []
+    blockers: List[str] = []
+    materials = sandbox_output.get("materials", [])
+    material_keys = _material_keys(materials)
+    duplicate_keys = sorted(
+        key
+        for key, count in _count_items(_normalize_key(key) for key in material_keys).items()
+        if count > 1
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "sandbox material keys are unique",
+        not duplicate_keys,
+        "sandbox material keys are unique",
+        f"duplicate sandbox material keys: {', '.join(duplicate_keys)}",
+    )
+
+    skipped_material_keys = {
+        _normalize_key(str(row.get("material_key", "")))
+        for row in sandbox_output.get("skipped_rows", [])
+        if row.get("material_key")
+    }
+    material_key_set = {_normalize_key(key) for key in material_keys}
+    skipped_present = sorted(skipped_material_keys.intersection(material_key_set))
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "skipped invalid rows are absent from sandbox materials",
+        not skipped_present,
+        "skipped invalid rows are absent from materials",
+        f"skipped invalid material keys appear in materials: {', '.join(skipped_present)}",
+    )
+
+    summary = sandbox_output.get("summary", {})
+    status_counts = _sandbox_material_status_counts(materials)
+    expected_counts = {
+        "added_materials": status_counts.get("added", 0),
+        "updated_materials": status_counts.get("updated", 0),
+        "unchanged_materials": status_counts.get("unchanged", 0),
+        "retained_baseline_materials": status_counts.get("baseline_retained", 0),
+        "sandbox_materials_written": len(materials),
+        "skipped_rows": len(sandbox_output.get("skipped_rows", [])),
+    }
+    mismatched_counts = [
+        f"{field}: summary={summary.get(field)} actual={actual_count}"
+        for field, actual_count in expected_counts.items()
+        if summary.get(field) != actual_count
+    ]
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        "sandbox summary counts match materials",
+        not mismatched_counts,
+        "sandbox summary counts match material lists",
+        "; ".join(mismatched_counts),
+    )
+    return validation_results, blockers
+
+
+def _add_fake_rehearsal_check(
+    validation_results: List[Dict[str, Any]],
+    blockers: List[str],
+    check: str,
+    passed: bool,
+    pass_detail: str,
+    fail_detail: str,
+) -> None:
+    validation_results.append(
+        {
+            "check": check,
+            "status": "PASS" if passed else "FAIL",
+            "detail": pass_detail if passed else fail_detail,
+        }
+    )
+    if not passed:
+        blockers.append(fail_detail)
+
+
+def _append_fake_rehearsal_state(
+    audit: Dict[str, Any],
+    status: str,
+    detail: str,
+) -> None:
+    audit["state_history"].append(
+        {
+            "status": status,
+            "at": _generated_timestamp(),
+            "detail": detail,
+        }
+    )
+    if status == "rollback_required":
+        audit["rollback"]["required"] = True
+    if status in {"rollback_passed", "rollback_failed"}:
+        audit["rollback"]["executed"] = True
+    if status == "rollback_passed":
+        audit["rollback"]["restore_verified"] = True
+
+
+def _finalize_fake_rehearsal(
+    audit: Dict[str, Any],
+    audit_log_path: str,
+    report_path: str,
+    status: str,
+    blockers: List[str],
+    detail: str,
+) -> None:
+    audit["status"] = status
+    audit["blockers"] = blockers
+    _append_fake_rehearsal_state(audit, status, detail)
+    _write_json_file(audit_log_path, audit)
+    _write_text_file(report_path, build_owner_pricing_fake_rehearsal_report(audit))
+
+
+def _sandbox_materials_for_fake_rehearsal(
+    sandbox_output: Dict[str, Any],
+) -> List[Dict[str, str]]:
+    materials: List[Dict[str, str]] = []
+    for material in sandbox_output.get("materials", []):
+        if not isinstance(material, dict):
+            continue
+        materials.append(
+            {
+                "material_key": str(material.get("material_key", "")),
+                "material_name": str(material.get("material_name", "")),
+                "unit": str(material.get("unit", "")),
+                "unit_price": str(material.get("unit_price", "")),
+            }
+        )
+    return materials
+
+
+def _write_fake_pricing_output(path: str, materials: List[Dict[str, str]]) -> None:
+    output_dir = os.path.dirname(os.path.abspath(path))
+    os.makedirs(output_dir, exist_ok=True)
+    extension = os.path.splitext(path)[1].lower()
+    if extension == ".csv":
+        with open(path, "w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=list(REQUIRED_OWNER_PRICING_FIELDS))
+            writer.writeheader()
+            for material in materials:
+                writer.writerow({field: material.get(field, "") for field in REQUIRED_OWNER_PRICING_FIELDS})
+        return
+    if extension == ".json":
+        _write_json_file(path, {"materials": materials})
+        return
+    raise ValueError("fake production output must be CSV or JSON")
+
+
+def _validate_fake_rehearsal_written_output(
+    output_path: str,
+    expected_materials: List[Dict[str, str]],
+    skipped_rows: List[Dict[str, Any]],
+    validation_label: str,
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    rows = _read_pricing_rows_for_fake_validation(output_path)
+    expected_keys = {
+        _normalize_key(str(material.get("material_key", "")))
+        for material in expected_materials
+        if material.get("material_key")
+    }
+    skipped_keys = {
+        _normalize_key(str(row.get("material_key", "")))
+        for row in skipped_rows
+        if row.get("material_key")
+    }
+    return _validate_fake_rehearsal_rows(
+        rows=rows,
+        expected_count=len(expected_materials),
+        expected_keys=expected_keys,
+        skipped_keys=skipped_keys,
+        validation_label=validation_label,
+    )
+
+
+def _validate_fake_rehearsal_restored_output(
+    output_path: str,
+    expected_records: Dict[str, CurrentPricingRow],
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    rows = _read_pricing_rows_for_fake_validation(output_path)
+    expected_keys = set(expected_records.keys())
+    return _validate_fake_rehearsal_rows(
+        rows=rows,
+        expected_count=len(expected_records),
+        expected_keys=expected_keys,
+        skipped_keys=set(),
+        validation_label="restored fake production output",
+    )
+
+
+def _validate_fake_rehearsal_rows(
+    rows: List[Dict[str, str]],
+    expected_count: int,
+    expected_keys: set,
+    skipped_keys: set,
+    validation_label: str,
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    validation_results: List[Dict[str, Any]] = []
+    blockers: List[str] = []
+    row_keys = [
+        _normalize_key(str(row.get("material_key", "")))
+        for row in rows
+        if row.get("material_key")
+    ]
+    row_key_set = set(row_keys)
+    duplicate_keys = sorted(
+        key for key, count in _count_items(row_keys).items() if count > 1
+    )
+    invalid_rows = [
+        row.get("material_key", "")
+        for row in rows
+        if _current_record_from_mapping(row) is None
+    ]
+    skipped_present = sorted(row_key_set.intersection(skipped_keys))
+
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        f"{validation_label} material count matches",
+        len(rows) == expected_count,
+        f"material count is {expected_count}",
+        f"material count mismatch: expected={expected_count} actual={len(rows)}",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        f"{validation_label} material keys match",
+        row_key_set == expected_keys,
+        "material keys match expected set",
+        "material keys do not match expected set",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        f"{validation_label} material keys are unique",
+        not duplicate_keys,
+        "material keys are unique",
+        f"duplicate material keys: {', '.join(duplicate_keys)}",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        f"{validation_label} has no skipped invalid rows",
+        not skipped_present,
+        "skipped invalid rows are absent",
+        f"skipped invalid material keys appear in output: {', '.join(skipped_present)}",
+    )
+    _add_fake_rehearsal_check(
+        validation_results,
+        blockers,
+        f"{validation_label} schema is valid",
+        not invalid_rows,
+        "schema is valid",
+        f"invalid material rows: {', '.join(invalid_rows)}",
+    )
+    return validation_results, blockers
+
+
+def _read_pricing_rows_for_fake_validation(path: str) -> List[Dict[str, str]]:
+    extension = os.path.splitext(path)[1].lower()
+    if extension == ".csv":
+        with open(path, "r", encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            return [_clean_row(row) for row in reader]
+    if extension == ".json":
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        rows: List[Dict[str, str]] = []
+        for material_key, item in _iter_json_materials(data):
+            if not isinstance(item, dict):
+                continue
+            cleaned = _clean_row(item)
+            if material_key and not cleaned.get("material_key"):
+                cleaned["material_key"] = material_key
+            rows.append(cleaned)
+        return rows
+    raise ValueError("fake pricing validation input must be CSV or JSON")
 
 
 def _load_validated_sandbox_output(sandbox_output_path: str) -> Tuple[Dict[str, Any], str]:

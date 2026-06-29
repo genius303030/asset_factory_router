@@ -9,6 +9,7 @@ import unittest
 from asset_factory.owner_pricing import (
     OWNER_PRICING_APPROVAL_PHRASE,
     dry_run_owner_pricing_import,
+    run_owner_pricing_final_import_fake_rehearsal,
     write_owner_pricing_final_import_preflight,
     write_owner_pricing_approval_record,
     write_sandbox_apply_output,
@@ -938,7 +939,10 @@ class TestOwnerPricingDryRun(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertNotRegex(result.stdout, r"owner-pricing-final-import(?!-preflight)")
+        self.assertNotRegex(
+            result.stdout,
+            r"owner-pricing-final-import(?!-(?:preflight|fake-rehearsal))",
+        )
         self.assertNotIn("production-import", result.stdout)
 
     def test_fake_example_approval_record_is_committed_output_shape(self):
@@ -987,6 +991,12 @@ class TestOwnerPricingDryRun(unittest.TestCase):
             file.write(CURRENT_PRICING_SAMPLE)
         return production_target_path
 
+    def _write_fake_production_target(self):
+        fake_target_path = os.path.join(self.test_dir.name, "fake_production_target.csv")
+        with open(fake_target_path, "w", encoding="utf-8") as file:
+            file.write(CURRENT_PRICING_SAMPLE)
+        return fake_target_path
+
     def _write_matching_temp_approval_record(self, sandbox_output_path):
         with open(self._fake_approval_record_path(), "r", encoding="utf-8") as file:
             approval_record = json.load(file)
@@ -1000,6 +1010,88 @@ class TestOwnerPricingDryRun(unittest.TestCase):
             json.dump(approval_record, file, indent=2)
             file.write("\n")
         return approval_record_path
+
+    def _write_matching_fake_preflight_report(
+        self,
+        sandbox_output_path,
+        approval_record_path,
+        fake_production_target_path,
+        backup_output_path,
+    ):
+        with open(sandbox_output_path, "rb") as file:
+            sandbox_sha256 = hashlib.sha256(file.read()).hexdigest()
+        with open(approval_record_path, "rb") as file:
+            approval_sha256 = hashlib.sha256(file.read()).hexdigest()
+        with open(fake_production_target_path, "rb") as file:
+            production_sha256 = hashlib.sha256(file.read()).hexdigest()
+
+        preflight = {
+            "preflight_type": "owner_pricing_final_import_preflight",
+            "status": "PASS",
+            "generated_at": "2026-06-29T00:00:00+00:00",
+            "checked_paths": {
+                "sandbox_output": sandbox_output_path,
+                "approval_record": approval_record_path,
+                "production_target": fake_production_target_path,
+                "backup_output": backup_output_path,
+                "report": "fake_preflight_report.md",
+                "report_json": "fake_preflight_report.json",
+            },
+            "checksums": {
+                "sandbox_output_sha256": sandbox_sha256,
+                "approval_record_sha256": approval_sha256,
+                "production_target_sha256": production_sha256,
+            },
+            "validation_results": [],
+            "blockers": [],
+            "warnings": [],
+            "production_write_performed": False,
+            "backup_written": False,
+            "live_json_mutated": False,
+            "production_pricing_mutated": False,
+        }
+        preflight_path = os.path.join(self.test_dir.name, "fake_preflight_report.json")
+        with open(preflight_path, "w", encoding="utf-8") as file:
+            json.dump(preflight, file, indent=2)
+            file.write("\n")
+        return preflight_path
+
+    def _fake_rehearsal_paths(self):
+        return {
+            "fake_output": os.path.join(self.test_dir.name, "fake_production_output.csv"),
+            "backup": os.path.join(self.test_dir.name, "fake_backup_output.csv"),
+            "audit": os.path.join(self.test_dir.name, "fake_rehearsal_audit.json"),
+            "report": os.path.join(self.test_dir.name, "fake_rehearsal_report.md"),
+        }
+
+    def _run_fake_rehearsal(self, **overrides):
+        paths = self._fake_rehearsal_paths()
+        paths.update(overrides.pop("paths", {}))
+        fake_target_path = overrides.pop("fake_target_path", None)
+        if fake_target_path is None:
+            fake_target_path = self._write_fake_production_target()
+        sandbox_output_path = overrides.pop("sandbox_output_path", self._fake_sandbox_output_path())
+        approval_record_path = overrides.pop("approval_record_path", self._fake_approval_record_path())
+        preflight_report_path = overrides.pop("preflight_report_path", None)
+        if preflight_report_path is None:
+            preflight_report_path = self._write_matching_fake_preflight_report(
+                sandbox_output_path,
+                approval_record_path,
+                fake_target_path,
+                paths["backup"],
+            )
+        result = run_owner_pricing_final_import_fake_rehearsal(
+            sandbox_output_path=sandbox_output_path,
+            approval_record_path=approval_record_path,
+            preflight_report_path=preflight_report_path,
+            fake_production_target_path=fake_target_path,
+            fake_production_output_path=paths["fake_output"],
+            backup_output_path=paths["backup"],
+            audit_log_path=paths["audit"],
+            report_path=paths["report"],
+            **overrides,
+        )
+        return result, paths, fake_target_path
 
     def test_preflight_command_success_with_fake_files(self):
         production_target_path = self._write_temp_production_target()
@@ -1407,6 +1499,267 @@ class TestOwnerPricingDryRun(unittest.TestCase):
         self.assertNotEqual(unsafe_backup.returncode, 0)
         self.assertIn("backup output path appears to target live or production", unsafe_backup.stderr)
 
+    def test_fake_rehearsal_success_path_writes_fake_backup_and_rolls_back(self):
+        result, paths, fake_target_path = self._run_fake_rehearsal()
+
+        self.assertEqual(result.status, "rollback_passed")
+        self.assertTrue(os.path.exists(paths["backup"]))
+        self.assertTrue(os.path.exists(paths["fake_output"]))
+        self.assertTrue(os.path.exists(paths["audit"]))
+        self.assertTrue(os.path.exists(paths["report"]))
+
+        with open(paths["audit"], "r", encoding="utf-8") as file:
+            audit = json.load(file)
+        states = [item["status"] for item in audit["state_history"]]
+        self.assertIn("started", states)
+        self.assertIn("backup_verified", states)
+        self.assertIn("fake_write_completed", states)
+        self.assertIn("passed", states)
+        self.assertIn("rollback_passed", states)
+        self.assertTrue(audit["fake_fixture_only"])
+        self.assertFalse(audit["safety_flags"]["production_write_performed"])
+        self.assertTrue(audit["safety_flags"]["fake_production_write_performed"])
+        self.assertTrue(audit["safety_flags"]["backup_written"])
+        self.assertFalse(audit["safety_flags"]["live_json_mutated"])
+        self.assertFalse(audit["safety_flags"]["production_pricing_mutated"])
+        self.assertEqual(
+            audit["checksums"]["backup_sha256"],
+            audit["checksums"]["pre_import_fake_production_sha256"],
+        )
+
+        with open(fake_target_path, "rb") as file:
+            fake_target_bytes = file.read()
+        with open(paths["fake_output"], "rb") as file:
+            restored_bytes = file.read()
+        self.assertEqual(restored_bytes, fake_target_bytes)
+
+    def test_fake_rehearsal_checksum_mismatch_fails_closed_with_audit(self):
+        fake_target_path = self._write_fake_production_target()
+        paths = self._fake_rehearsal_paths()
+        approval_record_path = os.path.join(self.test_dir.name, "fake_approval_record.json")
+        with open(self._fake_approval_record_path(), "r", encoding="utf-8") as file:
+            approval_record = json.load(file)
+        approval_record["sandbox_output"]["sha256"] = "0" * 64
+        with open(approval_record_path, "w", encoding="utf-8") as file:
+            json.dump(approval_record, file, indent=2)
+            file.write("\n")
+        preflight_report_path = self._write_matching_fake_preflight_report(
+            self._fake_sandbox_output_path(),
+            approval_record_path,
+            fake_target_path,
+            paths["backup"],
+        )
+
+        with self.assertRaisesRegex(ValueError, "fake rehearsal failed"):
+            run_owner_pricing_final_import_fake_rehearsal(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=approval_record_path,
+                preflight_report_path=preflight_report_path,
+                fake_production_target_path=fake_target_path,
+                fake_production_output_path=paths["fake_output"],
+                backup_output_path=paths["backup"],
+                audit_log_path=paths["audit"],
+                report_path=paths["report"],
+            )
+
+        self.assertFalse(os.path.exists(paths["backup"]))
+        self.assertFalse(os.path.exists(paths["fake_output"]))
+        with open(paths["audit"], "r", encoding="utf-8") as file:
+            audit = json.load(file)
+        self.assertEqual(audit["status"], "aborted")
+        self.assertIn("approval checksum does not match", "\n".join(audit["blockers"]))
+
+    def test_fake_rehearsal_stale_preflight_fails_closed(self):
+        fake_target_path = self._write_fake_production_target()
+        paths = self._fake_rehearsal_paths()
+        preflight_report_path = self._write_matching_fake_preflight_report(
+            self._fake_sandbox_output_path(),
+            self._fake_approval_record_path(),
+            fake_target_path,
+            paths["backup"],
+        )
+        with open(preflight_report_path, "r", encoding="utf-8") as file:
+            preflight = json.load(file)
+        preflight["status"] = "FAIL"
+        with open(preflight_report_path, "w", encoding="utf-8") as file:
+            json.dump(preflight, file, indent=2)
+            file.write("\n")
+
+        with self.assertRaisesRegex(ValueError, "fake rehearsal failed"):
+            run_owner_pricing_final_import_fake_rehearsal(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                preflight_report_path=preflight_report_path,
+                fake_production_target_path=fake_target_path,
+                fake_production_output_path=paths["fake_output"],
+                backup_output_path=paths["backup"],
+                audit_log_path=paths["audit"],
+                report_path=paths["report"],
+            )
+
+        with open(paths["audit"], "r", encoding="utf-8") as file:
+            audit = json.load(file)
+        self.assertEqual(audit["status"], "aborted")
+        self.assertFalse(os.path.exists(paths["fake_output"]))
+
+    def test_fake_rehearsal_unsafe_path_fails_closed(self):
+        fake_target_path = self._write_fake_production_target()
+        paths = self._fake_rehearsal_paths()
+        preflight_report_path = self._write_matching_fake_preflight_report(
+            self._fake_sandbox_output_path(),
+            self._fake_approval_record_path(),
+            fake_target_path,
+            paths["backup"],
+        )
+
+        with self.assertRaisesRegex(ValueError, "fake production output path appears unsafe"):
+            run_owner_pricing_final_import_fake_rehearsal(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                preflight_report_path=preflight_report_path,
+                fake_production_target_path=fake_target_path,
+                fake_production_output_path=os.path.join(self.test_dir.name, "prod", "fake_output.csv"),
+                backup_output_path=paths["backup"],
+                audit_log_path=paths["audit"],
+                report_path=paths["report"],
+            )
+
+    def test_fake_rehearsal_backup_path_exists_fails_closed(self):
+        fake_target_path = self._write_fake_production_target()
+        paths = self._fake_rehearsal_paths()
+        preflight_report_path = self._write_matching_fake_preflight_report(
+            self._fake_sandbox_output_path(),
+            self._fake_approval_record_path(),
+            fake_target_path,
+            paths["backup"],
+        )
+        with open(paths["backup"], "w", encoding="utf-8") as file:
+            file.write("existing fake backup")
+
+        with self.assertRaisesRegex(FileExistsError, "fake backup output"):
+            run_owner_pricing_final_import_fake_rehearsal(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                preflight_report_path=preflight_report_path,
+                fake_production_target_path=fake_target_path,
+                fake_production_output_path=paths["fake_output"],
+                backup_output_path=paths["backup"],
+                audit_log_path=paths["audit"],
+                report_path=paths["report"],
+            )
+
+        self.assertFalse(os.path.exists(paths["audit"]))
+        self.assertFalse(os.path.exists(paths["fake_output"]))
+
+    def test_fake_rehearsal_backup_write_failure_fails_closed(self):
+        fake_target_path = self._write_fake_production_target()
+        paths = self._fake_rehearsal_paths()
+        fake_parent_file = os.path.join(self.test_dir.name, "fake_parent_file")
+        with open(fake_parent_file, "w", encoding="utf-8") as file:
+            file.write("not a directory")
+        paths["backup"] = os.path.join(fake_parent_file, "fake_backup_output.csv")
+        preflight_report_path = self._write_matching_fake_preflight_report(
+            self._fake_sandbox_output_path(),
+            self._fake_approval_record_path(),
+            fake_target_path,
+            paths["backup"],
+        )
+
+        with self.assertRaisesRegex(ValueError, "fake rehearsal failed"):
+            run_owner_pricing_final_import_fake_rehearsal(
+                sandbox_output_path=self._fake_sandbox_output_path(),
+                approval_record_path=self._fake_approval_record_path(),
+                preflight_report_path=preflight_report_path,
+                fake_production_target_path=fake_target_path,
+                fake_production_output_path=paths["fake_output"],
+                backup_output_path=paths["backup"],
+                audit_log_path=paths["audit"],
+                report_path=paths["report"],
+            )
+
+        with open(paths["audit"], "r", encoding="utf-8") as file:
+            audit = json.load(file)
+        self.assertEqual(audit["status"], "failed_before_write")
+        self.assertFalse(audit["safety_flags"]["fake_production_write_performed"])
+        self.assertFalse(os.path.exists(paths["fake_output"]))
+
+    def test_fake_rehearsal_post_write_failure_enters_rollback_required(self):
+        result, paths, _fake_target_path = self._run_fake_rehearsal(
+            simulate_post_write_validation_failure=True
+        )
+
+        self.assertEqual(result.status, "rollback_passed")
+        with open(paths["audit"], "r", encoding="utf-8") as file:
+            audit = json.load(file)
+        states = [item["status"] for item in audit["state_history"]]
+        self.assertIn("rollback_required", states)
+        self.assertIn("rollback_passed", states)
+        self.assertTrue(audit["rollback"]["required"])
+        self.assertTrue(audit["post_write_blockers"])
+
+    def test_fake_rehearsal_rollback_verification_failure_is_captured(self):
+        paths = self._fake_rehearsal_paths()
+
+        with self.assertRaisesRegex(ValueError, "rollback failed"):
+            self._run_fake_rehearsal(
+                paths=paths,
+                simulate_rollback_verification_failure=True,
+            )
+
+        with open(paths["audit"], "r", encoding="utf-8") as file:
+            audit = json.load(file)
+        self.assertEqual(audit["status"], "rollback_failed")
+        states = [item["status"] for item in audit["state_history"]]
+        self.assertIn("rollback_failed", states)
+        self.assertTrue(audit["blockers"])
+
+    def test_cli_fake_rehearsal_success_writes_audit_and_report(self):
+        fake_target_path = self._write_fake_production_target()
+        paths = self._fake_rehearsal_paths()
+        preflight_report_path = self._write_matching_fake_preflight_report(
+            self._fake_sandbox_output_path(),
+            self._fake_approval_record_path(),
+            fake_target_path,
+            paths["backup"],
+        )
+        env = os.environ.copy()
+        src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
+        env["PYTHONPATH"] = src_path + os.pathsep + env.get("PYTHONPATH", "")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "asset_factory.main",
+                "owner-pricing-final-import-fake-rehearsal",
+                "--sandbox-output",
+                self._fake_sandbox_output_path(),
+                "--approval-record",
+                self._fake_approval_record_path(),
+                "--preflight-report",
+                preflight_report_path,
+                "--fake-production-target",
+                fake_target_path,
+                "--fake-production-output",
+                paths["fake_output"],
+                "--backup-output",
+                paths["backup"],
+                "--audit-log",
+                paths["audit"],
+                "--report",
+                paths["report"],
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("Status: rollback_passed", result.stdout)
+        self.assertIn("No real production write performed.", result.stdout)
+        self.assertTrue(os.path.exists(paths["audit"]))
+        self.assertTrue(os.path.exists(paths["report"]))
+
     def test_cli_still_does_not_add_final_import_command(self):
         env = os.environ.copy()
         src_path = os.path.abspath(os.path.join(os.getcwd(), "src"))
@@ -1426,9 +1779,28 @@ class TestOwnerPricingDryRun(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn("owner-pricing-final-import-preflight", result.stdout)
+        self.assertIn("owner-pricing-final-import-fake-rehearsal", result.stdout)
         self.assertNotIn("owner-pricing-final-import,", result.stdout)
         self.assertNotIn("owner-pricing-final-import ", result.stdout)
         self.assertNotIn("enable-production-import", result.stdout)
+
+    def test_fake_example_fake_rehearsal_audit_shape(self):
+        example_path = os.path.join(
+            os.getcwd(),
+            "examples",
+            "owner_pricing",
+            "fake_final_import_rehearsal_audit.json",
+        )
+
+        with open(example_path, "r", encoding="utf-8") as file:
+            audit = json.load(file)
+
+        self.assertEqual(audit["audit_type"], "owner_pricing_final_import_fake_rehearsal")
+        self.assertTrue(audit["fake_fixture_only"])
+        self.assertEqual(audit["status"], "rollback_passed")
+        self.assertFalse(audit["safety_flags"]["production_write_performed"])
+        self.assertFalse(audit["safety_flags"]["live_json_mutated"])
+        self.assertFalse(audit["safety_flags"]["production_pricing_mutated"])
 
     def test_fake_example_preflight_report_is_committed_output_shape(self):
         example_path = os.path.join(

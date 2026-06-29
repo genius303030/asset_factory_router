@@ -1,0 +1,240 @@
+{
+  "audit_type": "owner_pricing_final_import_fake_rehearsal",
+  "schema_version": 1,
+  "fake_fixture_only": true,
+  "status": "rollback_passed",
+  "generated_at": "2026-06-29T17:36:43+00:00",
+  "command": {
+    "name": "asset-factory owner-pricing-final-import-fake-rehearsal",
+    "reserved_production_command": "asset-factory owner-pricing-final-import",
+    "production_command_invoked": false
+  },
+  "paths": {
+    "sandbox_output": "examples\\owner_pricing\\fake_sandbox_pricing_output.json",
+    "approval_record": "examples\\owner_pricing\\fake_owner_pricing_approval_record.json",
+    "preflight_report": "examples\\owner_pricing\\fake_final_import_rehearsal_preflight_report.json",
+    "fake_production_target": "examples\\owner_pricing\\fake_final_import_rehearsal_production_target.csv",
+    "fake_production_output": "outputs\\owner_pricing\\fake_final_import_rehearsal_output.csv",
+    "backup_output": "outputs\\owner_pricing\\fake_final_import_rehearsal_backup.csv",
+    "audit_log": "examples\\owner_pricing\\fake_final_import_rehearsal_audit.json",
+    "report": "examples\\owner_pricing\\fake_final_import_rehearsal_report.md"
+  },
+  "checksums": {
+    "sandbox_output_sha256": "797a1164dcb965ac190bf5300f8ad3531b2f744874f8e4f8d1b8975743da07ce",
+    "approval_record_sha256": "c4b83d890a984d401af9e2ec0cca7ebd5e369c6c04710daf1aba03046dba052b",
+    "preflight_report_sha256": "0859a953c384c4154cedf7a7775262c6f51d466fb4fea20f3f3942ab8882eed7",
+    "pre_import_fake_production_sha256": "de7d89a1c7001ba4a9178598c06a734db1764980f65d94fdb4e39af2eea38a41",
+    "backup_sha256": "de7d89a1c7001ba4a9178598c06a734db1764980f65d94fdb4e39af2eea38a41",
+    "post_write_fake_production_sha256": "aac3af21d66b994135a7f795588d807d9a18919e0b8709ce26f06ae190458c35",
+    "restored_fake_production_sha256": "de7d89a1c7001ba4a9178598c06a734db1764980f65d94fdb4e39af2eea38a41"
+  },
+  "validation_results": [
+    {
+      "check": "sandbox output remains sandbox-only",
+      "status": "PASS",
+      "detail": "sandbox_only is true"
+    },
+    {
+      "check": "sandbox output final import remains disabled",
+      "status": "PASS",
+      "detail": "final_import_enabled is false"
+    },
+    {
+      "check": "sandbox output live JSON mutation flag remains false",
+      "status": "PASS",
+      "detail": "live_json_mutated is false"
+    },
+    {
+      "check": "sandbox output production mutation flag remains false",
+      "status": "PASS",
+      "detail": "production_pricing_mutated is false"
+    },
+    {
+      "check": "approval record type is owner sandbox approval",
+      "status": "PASS",
+      "detail": "approval record type is expected"
+    },
+    {
+      "check": "approval checksum matches sandbox output",
+      "status": "PASS",
+      "detail": "approval checksum matches sandbox output bytes"
+    },
+    {
+      "check": "approval record references intended sandbox output",
+      "status": "PASS",
+      "detail": "approval record references intended sandbox output"
+    },
+    {
+      "check": "approval record final import flag remains false",
+      "status": "PASS",
+      "detail": "approval final_import_enabled is false"
+    },
+    {
+      "check": "preflight report type is expected",
+      "status": "PASS",
+      "detail": "preflight type is expected"
+    },
+    {
+      "check": "preflight status is PASS",
+      "status": "PASS",
+      "detail": "preflight status is PASS"
+    },
+    {
+      "check": "preflight references sandbox output",
+      "status": "PASS",
+      "detail": "preflight references intended sandbox output"
+    },
+    {
+      "check": "preflight references approval record",
+      "status": "PASS",
+      "detail": "preflight references intended approval record"
+    },
+    {
+      "check": "preflight references fake production target",
+      "status": "PASS",
+      "detail": "preflight references intended fake production target"
+    },
+    {
+      "check": "preflight references fake backup output",
+      "status": "PASS",
+      "detail": "preflight references intended fake backup output"
+    },
+    {
+      "check": "preflight sandbox checksum matches",
+      "status": "PASS",
+      "detail": "preflight sandbox checksum matches"
+    },
+    {
+      "check": "preflight approval checksum matches",
+      "status": "PASS",
+      "detail": "preflight approval checksum matches"
+    },
+    {
+      "check": "preflight production target checksum matches fake target",
+      "status": "PASS",
+      "detail": "preflight fake production checksum matches"
+    },
+    {
+      "check": "preflight reports no production write",
+      "status": "PASS",
+      "detail": "preflight production_write_performed is false"
+    },
+    {
+      "check": "preflight reports no backup written",
+      "status": "PASS",
+      "detail": "preflight backup_written is false"
+    },
+    {
+      "check": "sandbox material keys are unique",
+      "status": "PASS",
+      "detail": "sandbox material keys are unique"
+    },
+    {
+      "check": "skipped invalid rows are absent from sandbox materials",
+      "status": "PASS",
+      "detail": "skipped invalid rows are absent from materials"
+    },
+    {
+      "check": "sandbox summary counts match materials",
+      "status": "PASS",
+      "detail": "sandbox summary counts match material lists"
+    }
+  ],
+  "post_write_validation_results": [
+    {
+      "check": "post-write fake production output material count matches",
+      "status": "PASS",
+      "detail": "material count is 4"
+    },
+    {
+      "check": "post-write fake production output material keys match",
+      "status": "PASS",
+      "detail": "material keys match expected set"
+    },
+    {
+      "check": "post-write fake production output material keys are unique",
+      "status": "PASS",
+      "detail": "material keys are unique"
+    },
+    {
+      "check": "post-write fake production output has no skipped invalid rows",
+      "status": "PASS",
+      "detail": "skipped invalid rows are absent"
+    },
+    {
+      "check": "post-write fake production output schema is valid",
+      "status": "PASS",
+      "detail": "schema is valid"
+    }
+  ],
+  "restore_validation_results": [
+    {
+      "check": "restored fake production output material count matches",
+      "status": "PASS",
+      "detail": "material count is 3"
+    },
+    {
+      "check": "restored fake production output material keys match",
+      "status": "PASS",
+      "detail": "material keys match expected set"
+    },
+    {
+      "check": "restored fake production output material keys are unique",
+      "status": "PASS",
+      "detail": "material keys are unique"
+    },
+    {
+      "check": "restored fake production output has no skipped invalid rows",
+      "status": "PASS",
+      "detail": "skipped invalid rows are absent"
+    },
+    {
+      "check": "restored fake production output schema is valid",
+      "status": "PASS",
+      "detail": "schema is valid"
+    }
+  ],
+  "state_history": [
+    {
+      "status": "started",
+      "at": "2026-06-29T17:36:43+00:00",
+      "detail": "fake rehearsal started"
+    },
+    {
+      "status": "backup_verified",
+      "at": "2026-06-29T17:36:43+00:00",
+      "detail": "fake backup checksum matched pre-import fake production checksum"
+    },
+    {
+      "status": "fake_write_completed",
+      "at": "2026-06-29T17:36:43+00:00",
+      "detail": "fake production output path was written"
+    },
+    {
+      "status": "passed",
+      "at": "2026-06-29T17:36:43+00:00",
+      "detail": "fake write and post-write validation passed"
+    },
+    {
+      "status": "rollback_passed",
+      "at": "2026-06-29T17:36:43+00:00",
+      "detail": "fake rollback restored and verified the fake output path"
+    }
+  ],
+  "safety_flags": {
+    "production_write_performed": false,
+    "fake_production_write_performed": true,
+    "backup_written": true,
+    "backup_written_to_fake_path": true,
+    "live_json_mutated": false,
+    "production_pricing_mutated": false
+  },
+  "rollback": {
+    "required": false,
+    "executed": true,
+    "restore_verified": true
+  },
+  "blockers": [],
+  "warnings": [],
+  "next_safe_step": "Review fake rehearsal evidence; real final import remains blocked."
+}
