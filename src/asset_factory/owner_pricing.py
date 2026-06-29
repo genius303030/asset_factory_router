@@ -79,6 +79,25 @@ class OwnerPricingDryRunResult:
     would_be_unchanged: List[PricingChange]
 
 
+@dataclass
+class OwnerPricingSandboxOutputResult:
+    source_csv: str
+    current_pricing: Optional[str]
+    sandbox_output_path: str
+    summary_report_path: Optional[str]
+    summary_json_path: Optional[str]
+    sandbox_apply_plan_path: Optional[str]
+    generated_at: str
+    rows_read: int
+    valid_rows: int
+    invalid_rows: int
+    sandbox_materials_written: int
+    added_materials: int
+    updated_materials: int
+    unchanged_materials: int
+    duplicate_material_keys: int
+
+
 LIVE_OUTPUT_PATH_PARTS = {
     "config",
     "data",
@@ -239,6 +258,90 @@ def write_sandbox_apply_plan(
     return result
 
 
+def write_sandbox_apply_output(
+    csv_path: str,
+    sandbox_output_path: str,
+    current_pricing_path: Optional[str] = None,
+    sandbox_apply_plan_path: Optional[str] = None,
+    summary_report_path: Optional[str] = None,
+    summary_json_path: Optional[str] = None,
+    overwrite: bool = False,
+) -> OwnerPricingSandboxOutputResult:
+    _validate_sandbox_output_path(
+        sandbox_output_path,
+        overwrite=overwrite,
+        output_kind="sandbox pricing output",
+    )
+    if summary_report_path:
+        _validate_sandbox_output_path(
+            summary_report_path,
+            overwrite=overwrite,
+            output_kind="sandbox summary report",
+        )
+    if summary_json_path:
+        _validate_sandbox_output_path(
+            summary_json_path,
+            overwrite=overwrite,
+            output_kind="sandbox JSON summary",
+        )
+
+    _validate_distinct_output_paths(
+        [
+            ("sandbox pricing output", sandbox_output_path),
+            ("sandbox summary report", summary_report_path),
+            ("sandbox JSON summary", summary_json_path),
+        ]
+    )
+
+    sandbox_apply_plan_info = _read_optional_sandbox_apply_plan(sandbox_apply_plan_path)
+    result = dry_run_owner_pricing_import(csv_path, current_pricing_path)
+    current_pricing = _load_current_pricing(current_pricing_path)
+    generated_at = _generated_timestamp()
+    sandbox_output = build_sandbox_apply_output_json(
+        result,
+        current_pricing=current_pricing,
+        sandbox_output_path=sandbox_output_path,
+        sandbox_apply_plan_info=sandbox_apply_plan_info,
+        generated_at=generated_at,
+    )
+
+    _write_json_file(sandbox_output_path, sandbox_output)
+
+    if summary_report_path:
+        summary_report = build_sandbox_apply_output_report(
+            result,
+            sandbox_output=sandbox_output,
+            summary_report_path=summary_report_path,
+        )
+        _write_text_file(summary_report_path, summary_report)
+
+    if summary_json_path:
+        summary_json = build_sandbox_apply_output_summary_json(
+            sandbox_output,
+            summary_json_path=summary_json_path,
+        )
+        _write_json_file(summary_json_path, summary_json)
+
+    summary = sandbox_output["summary"]
+    return OwnerPricingSandboxOutputResult(
+        source_csv=csv_path,
+        current_pricing=current_pricing_path,
+        sandbox_output_path=sandbox_output_path,
+        summary_report_path=summary_report_path,
+        summary_json_path=summary_json_path,
+        sandbox_apply_plan_path=sandbox_apply_plan_path,
+        generated_at=generated_at,
+        rows_read=result.rows_read,
+        valid_rows=result.valid_rows,
+        invalid_rows=result.invalid_rows,
+        sandbox_materials_written=summary["sandbox_materials_written"],
+        added_materials=summary["added_materials"],
+        updated_materials=summary["updated_materials"],
+        unchanged_materials=summary["unchanged_materials"],
+        duplicate_material_keys=len(result.duplicate_material_keys),
+    )
+
+
 def build_preview_report(result: OwnerPricingDryRunResult) -> str:
     lines = [
         "# Owner Pricing Import Dry-run Preview",
@@ -394,6 +497,151 @@ def build_sandbox_apply_plan_json(
             "No production pricing mutation.",
             "No import/apply command is executed by this plan.",
         ],
+    }
+
+
+def build_sandbox_apply_output_json(
+    result: OwnerPricingDryRunResult,
+    current_pricing: Dict[str, CurrentPricingRow],
+    sandbox_output_path: str,
+    sandbox_apply_plan_info: Optional[Dict[str, Any]] = None,
+    generated_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    generated_at = generated_at or _generated_timestamp()
+    sandbox_materials, retained_baseline_materials = _build_sandbox_materials(
+        current_pricing,
+        result.would_be_added,
+        result.would_be_updated,
+        result.would_be_unchanged,
+    )
+    skipped_rows = _skipped_rows(result)
+
+    return {
+        "output_type": "owner_pricing_sandbox_apply_output",
+        "sandbox_only": True,
+        "sandbox_notice": (
+            "Sandbox output only. This file is not production pricing data and "
+            "final import remains disabled."
+        ),
+        "generated_at": generated_at,
+        "source_csv_path": result.source_csv,
+        "baseline_pricing_path": result.current_pricing,
+        "sandbox_apply_plan": sandbox_apply_plan_info,
+        "sandbox_pricing_output_path": sandbox_output_path,
+        "live_json_mutated": False,
+        "production_pricing_mutated": False,
+        "final_import_enabled": False,
+        "summary": {
+            "total_rows_read": result.rows_read,
+            "valid_rows_applied": result.valid_rows,
+            "invalid_rows_skipped": result.invalid_rows,
+            "duplicate_keys": len(result.duplicate_material_keys),
+            "added_materials": len(result.would_be_added),
+            "updated_materials": len(result.would_be_updated),
+            "unchanged_materials": len(result.would_be_unchanged),
+            "retained_baseline_materials": len(retained_baseline_materials),
+            "skipped_rows": len(skipped_rows),
+            "sandbox_materials_written": len(sandbox_materials),
+        },
+        "warnings": _sandbox_output_warnings(result),
+        "materials": sandbox_materials,
+        "added_materials": [_change_to_dict(change) for change in result.would_be_added],
+        "updated_materials": [_change_to_dict(change) for change in result.would_be_updated],
+        "unchanged_materials": [_change_to_dict(change) for change in result.would_be_unchanged],
+        "retained_baseline_materials": retained_baseline_materials,
+        "skipped_rows": skipped_rows,
+        "duplicate_material_keys": [
+            {
+                "material_key": issue.material_key,
+                "rows": issue.rows,
+            }
+            for issue in result.duplicate_material_keys
+        ],
+        "sandbox_boundaries": [
+            "No live JSON mutation.",
+            "No production pricing mutation.",
+            "Invalid rows are skipped.",
+            "Duplicate material keys are skipped until owner/G2 review resolves them.",
+            "Final import remains disabled.",
+        ],
+    }
+
+
+def build_sandbox_apply_output_report(
+    result: OwnerPricingDryRunResult,
+    sandbox_output: Dict[str, Any],
+    summary_report_path: str,
+) -> str:
+    summary = sandbox_output["summary"]
+
+    lines = [
+        "# Owner Pricing Sandbox Apply Output Summary",
+        "",
+        "Sandbox output only. This report is not production pricing data and final import remains disabled.",
+        "",
+        "## Output Metadata",
+        "",
+        f"- Generated at: `{sandbox_output['generated_at']}`",
+        f"- Source CSV path: `{sandbox_output['source_csv_path']}`",
+        f"- Baseline pricing path: `{sandbox_output['baseline_pricing_path'] or 'not provided'}`",
+        f"- Sandbox apply plan reference: `{_sandbox_apply_plan_label(sandbox_output['sandbox_apply_plan'])}`",
+        f"- Sandbox pricing output path: `{sandbox_output['sandbox_pricing_output_path']}`",
+        f"- Summary report path: `{summary_report_path}`",
+        "",
+        "## Summary",
+        "",
+        "| Metric | Count |",
+        "| --- | ---: |",
+        f"| Total rows read | {summary['total_rows_read']} |",
+        f"| Valid rows applied | {summary['valid_rows_applied']} |",
+        f"| Invalid rows skipped | {summary['invalid_rows_skipped']} |",
+        f"| Duplicate keys | {summary['duplicate_keys']} |",
+        f"| Added materials | {summary['added_materials']} |",
+        f"| Updated materials | {summary['updated_materials']} |",
+        f"| Unchanged materials | {summary['unchanged_materials']} |",
+        f"| Retained baseline materials | {summary['retained_baseline_materials']} |",
+        f"| Skipped rows | {summary['skipped_rows']} |",
+        f"| Sandbox materials written | {summary['sandbox_materials_written']} |",
+        "",
+        "## Warnings",
+        "",
+        *_bullet_lines(sandbox_output["warnings"]),
+        "",
+        _duplicate_section(result.duplicate_material_keys),
+        _pricing_change_section("Added Materials", result.would_be_added),
+        _pricing_change_section("Updated Materials", result.would_be_updated),
+        _pricing_change_section("Unchanged Materials", result.would_be_unchanged),
+        _retained_baseline_section(sandbox_output["retained_baseline_materials"]),
+        _skipped_rows_section(sandbox_output["skipped_rows"]),
+        "## Sandbox Boundaries",
+        "",
+        "- This output does not import owner pricing into live JSON.",
+        "- This output does not update production pricing data.",
+        "- Invalid rows and duplicate material keys are not applied into the sandbox output.",
+        "- Owner approval and final import remain disabled until a separate G0-approved task exists.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def build_sandbox_apply_output_summary_json(
+    sandbox_output: Dict[str, Any],
+    summary_json_path: str,
+) -> Dict[str, Any]:
+    return {
+        "summary_type": "owner_pricing_sandbox_apply_output_summary",
+        "sandbox_only": True,
+        "generated_at": sandbox_output["generated_at"],
+        "source_csv_path": sandbox_output["source_csv_path"],
+        "baseline_pricing_path": sandbox_output["baseline_pricing_path"],
+        "sandbox_apply_plan": sandbox_output["sandbox_apply_plan"],
+        "sandbox_pricing_output_path": sandbox_output["sandbox_pricing_output_path"],
+        "summary_json_path": summary_json_path,
+        "summary": sandbox_output["summary"],
+        "warnings": sandbox_output["warnings"],
+        "duplicate_material_keys": sandbox_output["duplicate_material_keys"],
+        "skipped_rows": sandbox_output["skipped_rows"],
+        "sandbox_boundaries": sandbox_output["sandbox_boundaries"],
     }
 
 
@@ -663,6 +911,93 @@ def _pricing_change_section(title: str, changes: List[PricingChange]) -> str:
     return "\n".join(lines)
 
 
+def _retained_baseline_section(materials: List[Dict[str, Any]]) -> str:
+    lines = [
+        "## Retained Baseline Materials",
+        "",
+    ]
+    if not materials:
+        lines.extend(["None.", ""])
+        return "\n".join(lines)
+
+    lines.extend(
+        [
+            "| Material key | Material name | Unit | Unit price |",
+            "| --- | --- | --- | ---: |",
+        ]
+    )
+    for material in materials:
+        lines.append(
+            f"| `{material['material_key']}` | {material['material_name']} | "
+            f"{material['unit']} | {material['unit_price']} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _build_sandbox_materials(
+    current_pricing: Dict[str, CurrentPricingRow],
+    added: List[PricingChange],
+    updated: List[PricingChange],
+    unchanged: List[PricingChange],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    materials_by_key = {
+        normalized_key: _current_row_to_material(record)
+        for normalized_key, record in current_pricing.items()
+    }
+
+    for change in added:
+        materials_by_key[_normalize_key(change.material_key)] = _change_to_material(
+            change,
+            sandbox_status="added",
+        )
+
+    for change in updated:
+        materials_by_key[_normalize_key(change.material_key)] = _change_to_material(
+            change,
+            sandbox_status="updated",
+        )
+
+    for change in unchanged:
+        materials_by_key[_normalize_key(change.material_key)] = _change_to_material(
+            change,
+            sandbox_status="unchanged",
+        )
+
+    materials = sorted(
+        materials_by_key.values(),
+        key=lambda item: item["material_key"],
+    )
+    retained_baseline_materials = [
+        material
+        for material in materials
+        if material["sandbox_status"] == "baseline_retained"
+    ]
+    return materials, retained_baseline_materials
+
+
+def _current_row_to_material(record: CurrentPricingRow) -> Dict[str, Any]:
+    return {
+        "material_key": record.material_key,
+        "material_name": record.material_name,
+        "unit": record.unit,
+        "unit_price": _format_decimal(record.unit_price),
+        "sandbox_status": "baseline_retained",
+        "changed_fields": [],
+    }
+
+
+def _change_to_material(change: PricingChange, sandbox_status: str) -> Dict[str, Any]:
+    return {
+        "material_key": change.material_key,
+        "material_name": change.material_name,
+        "unit": change.unit,
+        "unit_price": _format_decimal(change.new_price),
+        "sandbox_status": sandbox_status,
+        "changed_fields": change.changed_fields or [],
+    }
+
+
 def _format_decimal(value: Decimal) -> str:
     return format(value, "f")
 
@@ -671,9 +1006,13 @@ def _generated_timestamp() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _validate_sandbox_output_path(path: str, overwrite: bool = False) -> None:
+def _validate_sandbox_output_path(
+    path: str,
+    overwrite: bool = False,
+    output_kind: str = "sandbox apply plan output",
+) -> None:
     if not path or not path.strip():
-        raise ValueError("sandbox apply plan output path is required")
+        raise ValueError(f"{output_kind} path is required")
 
     normalized_path = os.path.normpath(os.path.abspath(path))
     path_parts = {part.lower() for part in normalized_path.split(os.sep)}
@@ -681,16 +1020,42 @@ def _validate_sandbox_output_path(path: str, overwrite: bool = False) -> None:
 
     if path_parts.intersection(LIVE_OUTPUT_PATH_PARTS) or filename in LIVE_OUTPUT_FILENAMES:
         raise ValueError(
-            "sandbox apply plan output path appears to target live or production pricing data"
+            f"{output_kind} path appears to target live or production pricing data"
         )
 
     if os.path.exists(normalized_path) and not overwrite:
         raise FileExistsError(
-            "refusing to overwrite existing sandbox apply plan output without --overwrite"
+            f"refusing to overwrite existing {output_kind} without --overwrite"
         )
 
 
+def _validate_distinct_output_paths(paths: List[Tuple[str, Optional[str]]]) -> None:
+    seen_paths: Dict[str, str] = {}
+    for output_kind, path in paths:
+        if not path:
+            continue
+        normalized_path = os.path.normcase(os.path.normpath(os.path.abspath(path)))
+        if normalized_path in seen_paths:
+            raise ValueError(
+                f"{output_kind} path must be different from {seen_paths[normalized_path]}"
+            )
+        seen_paths[normalized_path] = output_kind
+
+
 def _read_optional_dry_run_report(path: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not path:
+        return None
+
+    with open(path, "r", encoding="utf-8") as file:
+        content = file.read()
+
+    return {
+        "path": path,
+        "bytes_read": len(content.encode("utf-8")),
+    }
+
+
+def _read_optional_sandbox_apply_plan(path: Optional[str]) -> Optional[Dict[str, Any]]:
     if not path:
         return None
 
@@ -709,6 +1074,12 @@ def _dry_run_report_label(info: Optional[Dict[str, Any]]) -> str:
     return f"{info['path']} ({info['bytes_read']} bytes read)"
 
 
+def _sandbox_apply_plan_label(info: Optional[Dict[str, Any]]) -> str:
+    if not info:
+        return "not provided"
+    return f"{info['path']} ({info['bytes_read']} bytes read)"
+
+
 def _sandbox_warnings(result: OwnerPricingDryRunResult) -> List[str]:
     warnings = [
         "Sandbox plan only; live import remains disabled.",
@@ -719,6 +1090,21 @@ def _sandbox_warnings(result: OwnerPricingDryRunResult) -> List[str]:
         warnings.append("Duplicate material keys exist; owner/G2 review is required.")
     if not result.current_pricing:
         warnings.append("No baseline pricing snapshot was provided; all valid rows are treated as add candidates.")
+    if result.current_pricing and result.current_records_read == 0:
+        warnings.append("Baseline pricing snapshot was provided but no comparable records were read.")
+    return warnings
+
+
+def _sandbox_output_warnings(result: OwnerPricingDryRunResult) -> List[str]:
+    warnings = [
+        "Sandbox output only; final import remains disabled.",
+    ]
+    if result.invalid_rows:
+        warnings.append("Invalid rows were skipped and were not applied into sandbox output.")
+    if result.duplicate_material_keys:
+        warnings.append("Duplicate material keys were skipped and require owner/G2 review.")
+    if not result.current_pricing:
+        warnings.append("No baseline pricing snapshot was provided; all valid rows are written as added materials.")
     if result.current_pricing and result.current_records_read == 0:
         warnings.append("Baseline pricing snapshot was provided but no comparable records were read.")
     return warnings
@@ -807,3 +1193,18 @@ def _change_to_dict(change: PricingChange) -> Dict[str, Any]:
         "new_price": _format_decimal(change.new_price),
         "changed_fields": change.changed_fields or [],
     }
+
+
+def _write_text_file(path: str, content: str) -> None:
+    output_dir = os.path.dirname(os.path.abspath(path))
+    os.makedirs(output_dir, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(content)
+
+
+def _write_json_file(path: str, content: Dict[str, Any]) -> None:
+    output_dir = os.path.dirname(os.path.abspath(path))
+    os.makedirs(output_dir, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(content, file, indent=2, ensure_ascii=False)
+        file.write("\n")

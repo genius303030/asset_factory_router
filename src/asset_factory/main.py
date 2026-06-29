@@ -178,6 +178,41 @@ def main():
         help="Allow overwriting an existing sandbox plan output",
     )
 
+    # Owner pricing sandbox apply output command
+    owner_pricing_output_parser = subparsers.add_parser(
+        "owner-pricing-apply-sandbox-output",
+        aliases=["owner-pricing-sandbox-output"],
+        parents=[parent_parser],
+        help="Write sandbox-only owner pricing output from owner pricing CSV data",
+    )
+    owner_pricing_output_parser.add_argument("--csv", required=True, help="Path to the owner pricing CSV file")
+    owner_pricing_output_parser.add_argument(
+        "--current-pricing",
+        help="Optional read-only current pricing snapshot, as CSV or JSON",
+    )
+    owner_pricing_output_parser.add_argument(
+        "--sandbox-apply-plan",
+        help="Optional sandbox apply plan from owner-pricing-plan-sandbox-apply",
+    )
+    owner_pricing_output_parser.add_argument(
+        "--output",
+        required=True,
+        help="Explicit path to write the sandbox pricing output JSON",
+    )
+    owner_pricing_output_parser.add_argument(
+        "--summary-report",
+        help="Optional path to write a markdown sandbox output summary",
+    )
+    owner_pricing_output_parser.add_argument(
+        "--summary-json",
+        help="Optional path to write a JSON sandbox output summary",
+    )
+    owner_pricing_output_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting existing sandbox output files",
+    )
+
     args = parser.parse_args()
     
     setup_logging(args.debug)
@@ -244,6 +279,40 @@ def main():
             print(f"Update candidates: {len(result.would_be_updated)}")
             print(f"Unchanged rows: {len(result.would_be_unchanged)}")
             print(f"Duplicate keys: {len(result.duplicate_material_keys)}")
+        elif args.command in (
+            "owner-pricing-apply-sandbox-output",
+            "owner-pricing-sandbox-output",
+        ):
+            import sys
+            from .owner_pricing import write_sandbox_apply_output
+            try:
+                result = write_sandbox_apply_output(
+                    csv_path=args.csv,
+                    current_pricing_path=args.current_pricing,
+                    sandbox_apply_plan_path=args.sandbox_apply_plan,
+                    sandbox_output_path=args.output,
+                    summary_report_path=args.summary_report,
+                    summary_json_path=args.summary_json,
+                    overwrite=args.overwrite,
+                )
+            except Exception as e:
+                print(f"Error: {str(e)}", file=sys.stderr)
+                raise SystemExit(1)
+
+            print("\n--- Owner Pricing Sandbox Apply Output ---")
+            print(f"Sandbox output: {args.output}")
+            if args.summary_report:
+                print(f"Summary report: {args.summary_report}")
+            if args.summary_json:
+                print(f"Summary JSON: {args.summary_json}")
+            print(f"CSV rows read: {result.rows_read}")
+            print(f"Valid rows applied: {result.valid_rows}")
+            print(f"Invalid rows skipped: {result.invalid_rows}")
+            print(f"Added materials: {result.added_materials}")
+            print(f"Updated materials: {result.updated_materials}")
+            print(f"Unchanged materials: {result.unchanged_materials}")
+            print(f"Duplicate keys: {result.duplicate_material_keys}")
+            print(f"Sandbox materials written: {result.sandbox_materials_written}")
         else:
             parser.print_help()
     except Exception as e:
