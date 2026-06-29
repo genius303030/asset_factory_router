@@ -23,3 +23,5 @@ data/owner_pricing/private/
 *.owner-pricing-sandbox-output.json
 *.owner-pricing-sandbox-summary.md
 *.owner-pricing-sandbox-summary.json
+*.owner-pricing-approval-record.json
+*.owner-pricing-approval-record.md
