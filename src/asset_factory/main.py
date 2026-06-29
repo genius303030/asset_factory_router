@@ -155,6 +155,29 @@ def main():
     )
     owner_pricing_parser.add_argument("--report", required=True, help="Path to write the markdown preview report")
 
+    # Owner pricing sandbox apply plan command
+    owner_pricing_plan_parser = subparsers.add_parser(
+        "owner-pricing-plan-sandbox-apply",
+        parents=[parent_parser],
+        help="Create a reviewable sandbox apply plan from owner pricing CSV dry-run data",
+    )
+    owner_pricing_plan_parser.add_argument("--csv", required=True, help="Path to the owner pricing CSV file")
+    owner_pricing_plan_parser.add_argument(
+        "--current-pricing",
+        help="Optional read-only current pricing snapshot, as CSV or JSON",
+    )
+    owner_pricing_plan_parser.add_argument(
+        "--dry-run-report",
+        help="Optional dry-run report to reference and read for traceability",
+    )
+    owner_pricing_plan_parser.add_argument("--plan", required=True, help="Path to write the markdown sandbox apply plan")
+    owner_pricing_plan_parser.add_argument("--plan-json", help="Optional path to write a JSON sandbox apply plan")
+    owner_pricing_plan_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting an existing sandbox plan output",
+    )
+
     args = parser.parse_args()
     
     setup_logging(args.debug)
@@ -194,6 +217,33 @@ def main():
             print(f"Would be added: {len(result.would_be_added)}")
             print(f"Would be updated: {len(result.would_be_updated)}")
             print(f"Would be unchanged: {len(result.would_be_unchanged)}")
+        elif args.command == "owner-pricing-plan-sandbox-apply":
+            import sys
+            from .owner_pricing import write_sandbox_apply_plan
+            try:
+                result = write_sandbox_apply_plan(
+                    csv_path=args.csv,
+                    current_pricing_path=args.current_pricing,
+                    dry_run_report_path=args.dry_run_report,
+                    plan_path=args.plan,
+                    plan_json_path=args.plan_json,
+                    overwrite=args.overwrite,
+                )
+            except Exception as e:
+                print(f"Error: {str(e)}", file=sys.stderr)
+                raise SystemExit(1)
+
+            print("\n--- Owner Pricing Sandbox Apply Plan ---")
+            print(f"Plan: {args.plan}")
+            if args.plan_json:
+                print(f"Plan JSON: {args.plan_json}")
+            print(f"CSV rows read: {result.rows_read}")
+            print(f"Valid rows: {result.valid_rows}")
+            print(f"Invalid rows: {result.invalid_rows}")
+            print(f"Add candidates: {len(result.would_be_added)}")
+            print(f"Update candidates: {len(result.would_be_updated)}")
+            print(f"Unchanged rows: {len(result.would_be_unchanged)}")
+            print(f"Duplicate keys: {len(result.duplicate_material_keys)}")
         else:
             parser.print_help()
     except Exception as e:
