@@ -28,5 +28,11 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover tests
 
+      - name: Run owner pricing unit tests
+        run: python -m unittest discover tests -p "test_owner_pricing.py"
+
+      - name: Run owner pricing safety gate
+        run: python scripts/check_owner_pricing_safety.py
+
       - name: Run Ruff check-only lint
         run: ruff check .

@@ -2192,10 +2192,15 @@ def _count_items(items) -> Dict[str, int]:
     return counts
 
 
+def _normalize_reference_path(path: str) -> str:
+    native_path = path.replace("\\", os.sep).replace("/", os.sep)
+    return os.path.normcase(os.path.normpath(os.path.abspath(native_path)))
+
+
 def _paths_match(left: Optional[str], right: str) -> bool:
     if not left or not right:
         return False
-    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(os.path.abspath(right))
+    return _normalize_reference_path(left) == _normalize_reference_path(right)
 
 
 def _validate_fake_rehearsal_input_path(
