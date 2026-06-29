@@ -50,6 +50,8 @@ Pull requests run GitHub Actions on Python 3.12:
 ```bash
 python -m pip install -e ".[dev]"
 python -m unittest discover tests
+python -m unittest discover tests -p "test_owner_pricing.py"
+python scripts/check_owner_pricing_safety.py
 ruff check .
 ```
 
@@ -58,6 +60,8 @@ Local recommended checks:
 ```bash
 py -3.12 -m pip install -e ".[dev]"
 py -3.12 -m unittest discover tests
+py -3.12 -m unittest discover tests -p "test_owner_pricing.py"
+py -3.12 scripts/check_owner_pricing_safety.py
 ruff check .
 git diff --check
 ```
@@ -65,3 +69,8 @@ git diff --check
 Ruff is check-only in the current workflow foundation. It does not auto-fix or
 enforce formatting yet. Optional pre-commit hooks are documented in
 `docs/ENGINEERING_WORKFLOW.md`.
+
+Owner-pricing-specific CI safety checks are documented in
+`docs/OWNER_PRICING_CI_GATE.md`. The gate is read-only and exists to keep
+dry-run, sandbox, approval, preflight, design-gate, and fake-rehearsal
+boundaries machine-checked before review.
