@@ -104,3 +104,7 @@ documented in `docs/OWNER_PRICING_COMMAND_CONTRACT.md`,
 Owner-pricing fake implementation evidence packet planning is documented in
 `docs/OWNER_PRICING_FAKE_IMPLEMENTATION_EVIDENCE_PACKET.md`, with G2 review
 guidance in `docs/OWNER_PRICING_FAKE_IMPLEMENTATION_EVIDENCE_G2_REVIEW.md`.
+
+Owner-pricing CI safety gate contract redesign recovery planning is documented
+in `docs/OWNER_PRICING_CI_GATE_CONTRACT_REDESIGN_PLAN.md`, with G2 review
+guidance in `docs/OWNER_PRICING_CI_GATE_CONTRACT_REDESIGN_G2_REVIEW.md`.
