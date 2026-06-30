@@ -1,0 +1,42 @@
+{
+  "fake_only_marker": "FAKE_ONLY",
+  "artifact_kind": "fake_owner_pricing_metrics_summary",
+  "task_id": "G1-037",
+  "workflow_category": "owner-pricing",
+  "workflow_stage": "fake_evidence_packet_artifacts",
+  "artifact_inventory_count": 10,
+  "fake_artifacts_added": [
+    "README.md",
+    "input/fake_owner_pricing_final_application_input.csv",
+    "output/fake_owner_pricing_final_application_output.json",
+    "audit/fake_owner_pricing_audit_log.json",
+    "owner_report/fake_owner_pricing_owner_report.md",
+    "rollback/fake_owner_pricing_rollback_plan.md",
+    "checksums/SHA256SUMS.txt",
+    "metrics/fake_owner_pricing_metrics_summary.json",
+    "fixtures/fake_fixture_registry.json",
+    "golden/fake_owner_pricing_golden_report.md"
+  ],
+  "fake_identifiers": {
+    "owner": "FAKE_OWNER_ALPHA",
+    "job": "FAKE_JOB_001",
+    "material": "FAKE_MATERIAL_TEST_A",
+    "vendor": "FAKE_VENDOR_TEST"
+  },
+  "change_flags": {
+    "docs_changed": true,
+    "tests_changed": true,
+    "src_changed": false,
+    "workflow_changed": false,
+    "examples_changed": true,
+    "production_behavior_changed": false,
+    "safety_gate_changed": false,
+    "live_json_mutated": false,
+    "sandbox_json_mutated": false
+  },
+  "review_status": {
+    "g2_review_status": "pending",
+    "g0_approval_status": "not_requested",
+    "merge_status": "not_requested"
+  }
+}

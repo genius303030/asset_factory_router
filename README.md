@@ -43,6 +43,11 @@ rehearsal; it is not production import. The current safe workflow remains:
 python -m unittest discover tests
 ```
 
+## Owner Pricing Fake Evidence Packet
+
+G1-037 fake-only owner-pricing evidence packet artifacts are documented in
+`docs/OWNER_PRICING_FAKE_EVIDENCE_PACKET_ARTIFACTS.md`.
+
 ## Engineering Validation
 
 Pull requests run GitHub Actions on Python 3.12:
