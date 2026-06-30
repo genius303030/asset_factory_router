@@ -74,3 +74,8 @@ Owner-pricing-specific CI safety checks are documented in
 `docs/OWNER_PRICING_CI_GATE.md`. The gate is read-only and exists to keep
 dry-run, sandbox, approval, preflight, design-gate, and fake-rehearsal
 boundaries machine-checked before review.
+
+Owner-pricing fake fixtures and golden report update rules are documented in
+`docs/OWNER_PRICING_FIXTURE_REGISTRY.md`,
+`docs/OWNER_PRICING_GOLDEN_REPORTS.md`, and
+`examples/owner_pricing/README.md`.
