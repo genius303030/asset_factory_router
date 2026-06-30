@@ -1,0 +1,34 @@
+{
+  "task_id": "G1-040",
+  "title": "Auto Workflow Inventory Pack",
+  "repo": "genius303030/asset_factory_router",
+  "owner": "G1",
+  "status": "ready_for_g1",
+  "priority": "P2",
+  "next_action": "Create docs-only inventory, queue map, example task record, and local tests.",
+  "blocked_reason": "",
+  "review_required": true,
+  "source_pr": null,
+  "source_issue": null,
+  "updated_at": "2026-07-01T00:00:00+08:00",
+  "workflow_category": "auto-workflow",
+  "allowed_change_layers": [
+    "docs",
+    "examples",
+    "tests"
+  ],
+  "safety_boundary": {
+    "read_only": true,
+    "github_api_token_required": false,
+    "external_api_calls_allowed": false,
+    "private_data_allowed": false,
+    "owner_pricing_runtime_change_allowed": false,
+    "live_json_mutation_allowed": false,
+    "sandbox_json_mutation_allowed": false
+  },
+  "review_route": {
+    "g1_completion": "open_draft_pr",
+    "g2_next_stop": "review_inventory_and_queue_shape",
+    "g0_next_stop": "approve_or_adjust_next_auto_workflow_scope"
+  }
+}

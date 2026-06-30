@@ -116,3 +116,14 @@ guidance in `docs/OWNER_PRICING_FAKE_IMPLEMENTATION_EVIDENCE_G2_REVIEW.md`.
 Owner-pricing CI safety gate contract redesign recovery planning is documented
 in `docs/OWNER_PRICING_CI_GATE_CONTRACT_REDESIGN_PLAN.md`, with G2 review
 guidance in `docs/OWNER_PRICING_CI_GATE_CONTRACT_REDESIGN_G2_REVIEW.md`.
+
+## Auto Workflow Inventory
+
+G1-040 starts the Auto Workflow mainline as a read-only inventory layer for
+task queue, workflow, CI, evidence, metrics, and owner briefing planning. It is
+not a runner, scheduler, GitHub integration, token flow, production behavior, or
+owner-pricing runtime change.
+
+- Inventory: `docs/AUTO_WORKFLOW_INVENTORY.md`
+- G0/G1/G2 queue map: `docs/G0_G1_G2_TASK_QUEUE_MAP.md`
+- Example queue record: `examples/auto_workflow/task_queue.example.json`
