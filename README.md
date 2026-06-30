@@ -43,6 +43,11 @@ rehearsal; it is not production import. The current safe workflow remains:
 python -m unittest discover tests
 ```
 
+## Owner Pricing Fake Evidence Packet
+
+G1-037 fake-only owner-pricing evidence packet artifacts are documented in
+`docs/OWNER_PRICING_FAKE_EVIDENCE_PACKET_ARTIFACTS.md`.
+
 ## Engineering Validation
 
 Pull requests run GitHub Actions on Python 3.12:
@@ -95,6 +100,10 @@ Owner-pricing production import command contract and test-matrix planning are
 documented in `docs/OWNER_PRICING_COMMAND_CONTRACT.md`,
 `docs/OWNER_PRICING_TEST_MATRIX.md`, and
 `docs/OWNER_PRICING_COMMAND_CONTRACT_G2_REVIEW.md`.
+
+Owner-pricing fake implementation evidence packet planning is documented in
+`docs/OWNER_PRICING_FAKE_IMPLEMENTATION_EVIDENCE_PACKET.md`, with G2 review
+guidance in `docs/OWNER_PRICING_FAKE_IMPLEMENTATION_EVIDENCE_G2_REVIEW.md`.
 
 Owner-pricing CI safety gate contract redesign planning is documented in
 `docs/OWNER_PRICING_CI_GATE_CONTRACT_REDESIGN_PLAN.md`, with G2 review guidance
