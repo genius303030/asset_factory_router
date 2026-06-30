@@ -53,7 +53,7 @@ class MetricsBaselineTests(unittest.TestCase):
 
     def test_summary_is_network_free(self):
         summary = self.metrics.summarize_rows(self.rows)
-        self.assertIn("rows: 8", summary)
+        self.assertIn("rows: 9", summary)
         self.assertIn("production_behavior_changed=yes: 0", summary)
 
 

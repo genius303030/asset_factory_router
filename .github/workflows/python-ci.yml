@@ -34,5 +34,11 @@ jobs:
       - name: Run owner pricing safety gate
         run: python scripts/check_owner_pricing_safety.py
 
+      - name: Run PR metrics baseline validation
+        run: python scripts/collect_pr_metrics.py --validate --summary
+
+      - name: Run owner pricing fake evidence packet verifier
+        run: python scripts/verify_owner_pricing_fake_evidence_packet.py
+
       - name: Run Ruff check-only lint
         run: ruff check .

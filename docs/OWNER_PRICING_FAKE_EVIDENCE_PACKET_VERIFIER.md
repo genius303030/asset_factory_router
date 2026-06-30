@@ -20,6 +20,21 @@ py -3.12 -B scripts/verify_owner_pricing_fake_evidence_packet.py
 The command exits `0` when the fake packet is valid and `1` when any check
 fails. It verifies the repository packet by default.
 
+## CI Wiring
+
+G1-039 wires the standalone verifier into GitHub Actions as part of the Python
+validation job. The CI step runs:
+
+```bash
+python scripts/verify_owner_pricing_fake_evidence_packet.py
+```
+
+The verifier runs after the owner-pricing safety gate and metrics baseline
+validation, and before Ruff check-only lint. This keeps fake evidence packet
+integrity in the regular PR validation chain without registering an
+`asset-factory` CLI command, adding CLI flags, changing owner-pricing runtime
+behavior, or changing the safety gate.
+
 ## Verifier Checks
 
 The verifier checks:
