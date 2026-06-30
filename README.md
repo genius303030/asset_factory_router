@@ -90,3 +90,8 @@ Owner-pricing production import implementation plan v2 is documented in
 approval and review checklists in
 `docs/OWNER_PRICING_PRODUCTION_IMPORT_G0_APPROVAL_CHECKLIST.md` and
 `docs/OWNER_PRICING_PRODUCTION_IMPORT_G2_REVIEW_CHECKLIST.md`.
+
+Owner-pricing production import command contract and test-matrix planning are
+documented in `docs/OWNER_PRICING_COMMAND_CONTRACT.md`,
+`docs/OWNER_PRICING_TEST_MATRIX.md`, and
+`docs/OWNER_PRICING_COMMAND_CONTRACT_G2_REVIEW.md`.
