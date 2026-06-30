@@ -100,3 +100,7 @@ Owner-pricing production import command contract and test-matrix planning are
 documented in `docs/OWNER_PRICING_COMMAND_CONTRACT.md`,
 `docs/OWNER_PRICING_TEST_MATRIX.md`, and
 `docs/OWNER_PRICING_COMMAND_CONTRACT_G2_REVIEW.md`.
+
+Owner-pricing fake implementation evidence packet planning is documented in
+`docs/OWNER_PRICING_FAKE_IMPLEMENTATION_EVIDENCE_PACKET.md`, with G2 review
+guidance in `docs/OWNER_PRICING_FAKE_IMPLEMENTATION_EVIDENCE_G2_REVIEW.md`.
