@@ -1,0 +1,57 @@
+{
+  "fake_only_marker": "FAKE_ONLY",
+  "artifact_kind": "fake_owner_pricing_final_application_output",
+  "workflow_stage": "fake_evidence_packet_artifacts",
+  "runtime_behavior": "not_executed_static_review_artifact",
+  "source_input": "examples/owner_pricing_fake_evidence_packet/input/fake_owner_pricing_final_application_input.csv",
+  "final_application_behavior_added": false,
+  "parser_registration_added": false,
+  "cli_flags_added": [],
+  "live_json_mutated": false,
+  "sandbox_json_mutated": false,
+  "production_write_performed": false,
+  "records": [
+    {
+      "fake_only_marker": "FAKE_ONLY",
+      "owner_id": "FAKE_OWNER_ALPHA",
+      "job_id": "FAKE_JOB_001",
+      "material_id": "FAKE_MATERIAL_TEST_A",
+      "vendor_id": "FAKE_VENDOR_TEST",
+      "review_action": "fake_review_only_no_write",
+      "fake_sample_amount": "246.90"
+    },
+    {
+      "fake_only_marker": "FAKE_ONLY",
+      "owner_id": "FAKE_OWNER_ALPHA",
+      "job_id": "FAKE_JOB_001",
+      "material_id": "FAKE_MATERIAL_TEST_B",
+      "vendor_id": "FAKE_VENDOR_TEST",
+      "review_action": "fake_review_only_no_write",
+      "fake_sample_amount": "50.00"
+    },
+    {
+      "fake_only_marker": "FAKE_ONLY",
+      "owner_id": "FAKE_OWNER_ALPHA",
+      "job_id": "FAKE_JOB_001",
+      "material_id": "FAKE_MATERIAL_TEST_C",
+      "vendor_id": "FAKE_VENDOR_TEST",
+      "review_action": "fake_review_only_no_write",
+      "fake_sample_amount": "30.00"
+    }
+  ],
+  "summary": {
+    "fake_rows_seen": 3,
+    "fake_rows_written": 0,
+    "fake_rows_requiring_g2_review": 3,
+    "fake_total_amount": "326.90",
+    "fake_currency": "FAKE_SAMPLE_ONLY"
+  },
+  "safety_boundary": {
+    "fake_only": true,
+    "real_owner_data_present": false,
+    "real_customer_data_present": false,
+    "real_job_data_present": false,
+    "real_material_data_present": false,
+    "real_pricing_data_present": false
+  }
+}
