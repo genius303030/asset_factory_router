@@ -79,3 +79,8 @@ Owner-pricing fake fixtures and golden report update rules are documented in
 `docs/OWNER_PRICING_FIXTURE_REGISTRY.md`,
 `docs/OWNER_PRICING_GOLDEN_REPORTS.md`, and
 `examples/owner_pricing/README.md`.
+
+Owner-pricing and engineering process metrics are documented in
+`docs/METRICS_BASELINE.md` and
+`docs/OWNER_PRICING_WORKFLOW_METRICS.md`. The initial CSV baseline is
+`examples/metrics/owner_pricing_pr_metrics.csv`.

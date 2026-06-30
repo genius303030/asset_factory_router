@@ -45,6 +45,10 @@ PRIVATE_OWNER_PRICING_PREFIXES = (
     "data/owner_pricing/private/",
 )
 
+OWNER_PRICING_METADATA_FILES = {
+    "examples/metrics/owner_pricing_pr_metrics.csv",
+}
+
 REQUIRED_IGNORED_PATHS = (
     "owner_pricing_private/real_owner_pricing.csv",
     "input/owner_pricing/private/real_owner_pricing.csv",
@@ -109,6 +113,9 @@ def is_forbidden_flag_path(path: str) -> bool:
 def real_owner_pricing_data_reason(path: str) -> str | None:
     normalized = normalize_git_path(path).lower()
     suffix = Path(normalized).suffix
+
+    if normalized in OWNER_PRICING_METADATA_FILES:
+        return None
 
     if normalized.startswith(PRIVATE_OWNER_PRICING_PREFIXES):
         return "private owner-pricing path is tracked"

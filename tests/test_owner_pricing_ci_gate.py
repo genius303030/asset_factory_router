@@ -33,6 +33,11 @@ class OwnerPricingCiGateTests(unittest.TestCase):
                 "examples/owner_pricing/fake_owner_pricing.csv"
             )
         )
+        self.assertIsNone(
+            owner_pricing_gate.real_owner_pricing_data_reason(
+                "examples/metrics/owner_pricing_pr_metrics.csv"
+            )
+        )
         self.assertIsNotNone(
             owner_pricing_gate.real_owner_pricing_data_reason(
                 "owner_pricing_private/real_owner_pricing.csv"
