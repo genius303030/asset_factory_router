@@ -48,6 +48,14 @@ python -m unittest discover tests
 G1-037 fake-only owner-pricing evidence packet artifacts are documented in
 `docs/OWNER_PRICING_FAKE_EVIDENCE_PACKET_ARTIFACTS.md`.
 
+G1-038 fake evidence packet verifier documentation is available in
+`docs/OWNER_PRICING_FAKE_EVIDENCE_PACKET_VERIFIER.md`. Run the local verifier
+with:
+
+```bash
+py -3.12 -B scripts/verify_owner_pricing_fake_evidence_packet.py
+```
+
 ## Engineering Validation
 
 Pull requests run GitHub Actions on Python 3.12:
