@@ -95,3 +95,7 @@ Owner-pricing production import command contract and test-matrix planning are
 documented in `docs/OWNER_PRICING_COMMAND_CONTRACT.md`,
 `docs/OWNER_PRICING_TEST_MATRIX.md`, and
 `docs/OWNER_PRICING_COMMAND_CONTRACT_G2_REVIEW.md`.
+
+Owner-pricing CI safety gate contract redesign planning is documented in
+`docs/OWNER_PRICING_CI_GATE_CONTRACT_REDESIGN_PLAN.md`, with G2 review guidance
+in `docs/OWNER_PRICING_CI_GATE_CONTRACT_REDESIGN_G2_REVIEW.md`.
