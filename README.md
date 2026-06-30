@@ -84,3 +84,9 @@ Owner-pricing and engineering process metrics are documented in
 `docs/METRICS_BASELINE.md` and
 `docs/OWNER_PRICING_WORKFLOW_METRICS.md`. The initial CSV baseline is
 `examples/metrics/owner_pricing_pr_metrics.csv`.
+
+Owner-pricing production import implementation plan v2 is documented in
+`docs/OWNER_PRICING_PRODUCTION_IMPORT_IMPLEMENTATION_PLAN_V2.md`, with
+approval and review checklists in
+`docs/OWNER_PRICING_PRODUCTION_IMPORT_G0_APPROVAL_CHECKLIST.md` and
+`docs/OWNER_PRICING_PRODUCTION_IMPORT_G2_REVIEW_CHECKLIST.md`.
