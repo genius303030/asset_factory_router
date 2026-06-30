@@ -1,0 +1,4 @@
+fake_only_marker,owner_id,job_id,material_id,vendor_id,workflow_stage,unit,quantity,fake_sample_unit_price,fake_sample_total,review_note
+FAKE_ONLY,FAKE_OWNER_ALPHA,FAKE_JOB_001,FAKE_MATERIAL_TEST_A,FAKE_VENDOR_TEST,FAKE_FINAL_APPLICATION_EVIDENCE,EA,2,123.45,246.90,fake sample amount only; not production data
+FAKE_ONLY,FAKE_OWNER_ALPHA,FAKE_JOB_001,FAKE_MATERIAL_TEST_B,FAKE_VENDOR_TEST,FAKE_FINAL_APPLICATION_EVIDENCE,EA,1,50.00,50.00,fake sample amount only; not production data
+FAKE_ONLY,FAKE_OWNER_ALPHA,FAKE_JOB_001,FAKE_MATERIAL_TEST_C,FAKE_VENDOR_TEST,FAKE_FINAL_APPLICATION_EVIDENCE,EA,3,10.00,30.00,fake sample amount only; not production data

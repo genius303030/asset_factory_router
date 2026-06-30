@@ -1,0 +1,52 @@
+{
+  "fake_only_marker": "FAKE_ONLY",
+  "artifact_kind": "fake_owner_pricing_audit_log",
+  "workflow_stage": "fake_evidence_packet_artifacts",
+  "audit_id": "FAKE_AUDIT_G1_037_PACKET_001",
+  "static_review_timestamp": "FAKE_STATIC_TIMESTAMP_2026_06_30T000000Z",
+  "final_application_behavior_added": false,
+  "parser_registration_added": false,
+  "cli_flags_added": [],
+  "live_json_mutated": false,
+  "sandbox_json_mutated": false,
+  "safety_gate_changed": false,
+  "events": [
+    {
+      "sequence": 1,
+      "event": "fake_packet_opened",
+      "actor": "G1_CODEX",
+      "fake_only_marker": "FAKE_ONLY",
+      "result": "static_artifact_review_started"
+    },
+    {
+      "sequence": 2,
+      "event": "fake_input_registered",
+      "actor": "G1_CODEX",
+      "fake_only_marker": "FAKE_ONLY",
+      "result": "FAKE_OWNER_ALPHA FAKE_JOB_001 fake rows listed"
+    },
+    {
+      "sequence": 3,
+      "event": "fake_output_compared",
+      "actor": "G1_CODEX",
+      "fake_only_marker": "FAKE_ONLY",
+      "result": "no write behavior present"
+    },
+    {
+      "sequence": 4,
+      "event": "fake_rollback_documented",
+      "actor": "G1_CODEX",
+      "fake_only_marker": "FAKE_ONLY",
+      "result": "rollback expectations documented without production files"
+    },
+    {
+      "sequence": 5,
+      "event": "fake_checksums_recorded",
+      "actor": "G1_CODEX",
+      "fake_only_marker": "FAKE_ONLY",
+      "result": "SHA256SUMS.txt required for review"
+    }
+  ],
+  "g2_review_status": "pending",
+  "g0_approval_status": "not_requested"
+}

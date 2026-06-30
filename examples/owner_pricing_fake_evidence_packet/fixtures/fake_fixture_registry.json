@@ -1,0 +1,71 @@
+{
+  "fake_only_marker": "FAKE_ONLY",
+  "artifact_kind": "fake_fixture_registry",
+  "registry_id": "G1-037-FAKE-EVIDENCE-PACKET-REGISTRY",
+  "packet_root": "examples/owner_pricing_fake_evidence_packet",
+  "review_boundary": {
+    "runtime_behavior_added": false,
+    "parser_registration_added": false,
+    "formal_cli_flags_added": false,
+    "live_json_mutated": false,
+    "sandbox_json_mutated": false,
+    "real_data_allowed": false
+  },
+  "artifacts": [
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/README.md",
+      "kind": "packet_readme",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/input/fake_owner_pricing_final_application_input.csv",
+      "kind": "fake_input",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/output/fake_owner_pricing_final_application_output.json",
+      "kind": "fake_output",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/audit/fake_owner_pricing_audit_log.json",
+      "kind": "fake_audit",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/owner_report/fake_owner_pricing_owner_report.md",
+      "kind": "fake_owner_report",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/rollback/fake_owner_pricing_rollback_plan.md",
+      "kind": "fake_rollback_plan",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/metrics/fake_owner_pricing_metrics_summary.json",
+      "kind": "fake_metrics",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/fixtures/fake_fixture_registry.json",
+      "kind": "fake_fixture_registry",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    },
+    {
+      "path": "examples/owner_pricing_fake_evidence_packet/golden/fake_owner_pricing_golden_report.md",
+      "kind": "fake_golden_report",
+      "fake_only_marker_required": true,
+      "checksum_required": true
+    }
+  ],
+  "g2_review_rule": "Every listed artifact must remain FAKE_ONLY and checksum-verifiable before G2 can mark the packet reviewed."
+}
