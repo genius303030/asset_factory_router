@@ -41,7 +41,7 @@ EXPECTED_COLUMNS = (
     "notes",
 )
 
-REQUIRED_PR_NUMBERS = {"13", "14", "15", "17", "18", "20", "21", "23"}
+REQUIRED_PR_NUMBERS = {"13", "14", "15", "17", "18", "20", "21", "23", "37"}
 BOOLEAN_VALUES = {"yes", "no"}
 COUNT_VALUES = {"unknown", "not_run"}
 CI_STATUS_VALUES = {"pass", "fail", "pending", "unknown"}

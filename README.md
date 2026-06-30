@@ -56,6 +56,9 @@ with:
 py -3.12 -B scripts/verify_owner_pricing_fake_evidence_packet.py
 ```
 
+G1-039 wires that verifier into GitHub Actions PR validation. The CI wiring
+contract is documented in `docs/OWNER_PRICING_CI_VERIFIER_WIRING.md`.
+
 ## Engineering Validation
 
 Pull requests run GitHub Actions on Python 3.12:
@@ -65,6 +68,8 @@ python -m pip install -e ".[dev]"
 python -m unittest discover tests
 python -m unittest discover tests -p "test_owner_pricing.py"
 python scripts/check_owner_pricing_safety.py
+python scripts/collect_pr_metrics.py --validate --summary
+python scripts/verify_owner_pricing_fake_evidence_packet.py
 ruff check .
 ```
 
@@ -75,6 +80,8 @@ py -3.12 -m pip install -e ".[dev]"
 py -3.12 -m unittest discover tests
 py -3.12 -m unittest discover tests -p "test_owner_pricing.py"
 py -3.12 scripts/check_owner_pricing_safety.py
+py -3.12 scripts/collect_pr_metrics.py --validate --summary
+py -3.12 scripts/verify_owner_pricing_fake_evidence_packet.py
 ruff check .
 git diff --check
 ```
