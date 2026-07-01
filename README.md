@@ -127,3 +127,16 @@ owner-pricing runtime change.
 - Inventory: `docs/AUTO_WORKFLOW_INVENTORY.md`
 - G0/G1/G2 queue map: `docs/G0_G1_G2_TASK_QUEUE_MAP.md`
 - Example queue record: `examples/auto_workflow/task_queue.example.json`
+
+G1-041 extends the same Auto Workflow line with a read-only owner briefing
+template. It defines the daily/per-round G0 briefing shape, example-only
+markdown output, and example source JSON for a future generator. It does not add
+a queue runner, scheduler, GitHub collector, token flow, auto-merge behavior,
+production behavior, or owner-pricing runtime change.
+
+- Owner briefing template:
+  `docs/AUTO_WORKFLOW_OWNER_BRIEFING_TEMPLATE.md`
+- Example owner briefing:
+  `examples/auto_workflow/owner_briefing.example.md`
+- Example owner briefing source:
+  `examples/auto_workflow/owner_briefing.source.example.json`

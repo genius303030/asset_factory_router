@@ -110,6 +110,29 @@ private data. The minimum briefing should include:
 This map does not implement that generator. It only defines the shape G0 can
 review before any future automation is added.
 
+## Owner Briefing In The Workflow
+
+The owner briefing sits between task queue state and G0 decision-making. It is
+the readable summary G0 can use at the end of a day or work round.
+
+G1 produces briefing source data and example markdown from committed queue
+records, PR notes, validation output, and stated blockers. G1 does not approve
+the work, merge the PR, or treat generated text as a business decision.
+
+G2 reviews the briefing against the queue records, PR facts, docs, tests,
+evidence, and safety boundaries. G2 may report PASS or request changes, but G2
+does not override G0 authority.
+
+G0 makes the decision: approve, reject, merge, re-scope, unblock, or wait.
+Automation may format the briefing, but it must not auto-merge, auto-approve,
+or bypass G2 review and G0 decision-making.
+
+The first template for this briefing is documented in:
+
+```text
+docs/AUTO_WORKFLOW_OWNER_BRIEFING_TEMPLATE.md
+```
+
 ## Safety Boundary
 
 This queue map is safe only while it remains docs/example/test level. Future
@@ -117,6 +140,7 @@ automation must still preserve these rules:
 
 - No token committed to the repo.
 - No external API access from unit tests.
+- No automatic merge.
 - No production data reads.
 - No live or sandbox JSON mutation.
 - No owner-pricing runtime change unless G0 explicitly assigns that scope.

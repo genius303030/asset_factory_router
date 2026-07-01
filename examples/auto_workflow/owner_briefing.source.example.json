@@ -1,0 +1,85 @@
+{
+  "generated_at": "2026-07-01T00:00:00+08:00",
+  "repo": "genius303030/asset_factory_router",
+  "open_prs": [
+    {
+      "pr": "#40-example",
+      "title": "Auto Workflow Inventory Pack",
+      "branch": "codex/g1-040-auto-workflow-inventory",
+      "base_branch": "main",
+      "state": "example_draft",
+      "ci_status": "example_pass",
+      "review_status": "waiting_g2",
+      "merge_ready": false
+    },
+    {
+      "pr": "#41-example",
+      "title": "Owner Briefing Template Pack",
+      "branch": "codex/g1-041-owner-briefing-template-pack",
+      "base_branch": "codex/g1-040-auto-workflow-inventory",
+      "state": "example_draft",
+      "ci_status": "not_run_in_example",
+      "review_status": "waiting_g2",
+      "merge_ready": false
+    }
+  ],
+  "active_tasks": [
+    {
+      "task_id": "G1-040",
+      "title": "Auto Workflow Inventory Pack",
+      "owner": "G2",
+      "status": "waiting_review",
+      "priority": "P2",
+      "review_required": true,
+      "next_action": "Review inventory and queue map."
+    },
+    {
+      "task_id": "G1-041",
+      "title": "Owner Briefing Template Pack",
+      "owner": "G1",
+      "status": "in_progress",
+      "priority": "P2",
+      "review_required": true,
+      "next_action": "Finish template, examples, tests, and draft PR."
+    }
+  ],
+  "waiting_review": [
+    {
+      "task_id": "G1-040",
+      "review_owner": "G2",
+      "review_reason": "Inventory and task queue shape require review."
+    }
+  ],
+  "blocked_items": [],
+  "next_actions": [
+    {
+      "owner": "G0",
+      "action": "Review the owner briefing shape after G2 comments."
+    },
+    {
+      "owner": "G1",
+      "action": "Keep the package docs/examples/tests only and avoid runtime automation."
+    },
+    {
+      "owner": "G2",
+      "action": "Confirm required sections, example-only labels, and no auto-merge boundary."
+    }
+  ],
+  "owner_manual_action_required": {
+    "required": false,
+    "reason": "Example round is waiting on G1/G2 workflow steps, not a G0 business decision."
+  },
+  "safety_boundary": {
+    "example_only": true,
+    "read_only": true,
+    "live_sync": false,
+    "github_api_used": false,
+    "token_required": false,
+    "external_api_calls_allowed": false,
+    "auto_merge_allowed": false,
+    "production_behavior_allowed": false,
+    "owner_pricing_runtime_change_allowed": false,
+    "live_json_mutation_allowed": false,
+    "sandbox_json_mutation_allowed": false
+  }
+}
